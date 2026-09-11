@@ -12,6 +12,12 @@
             <p class="text-sm text-slate-500">Track jewelry fabrication, allocate craftsmen, and approve finished pieces.</p>
         </div>
         <div class="flex items-center gap-3">
+            <a href="{{ route('admin.work_orders.import.form') }}" class="inline-flex items-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                Import Excel / CSV
+            </a>
             <a href="{{ route('admin.work_orders.create', ['back_url' => request()->fullUrl()]) }}" class="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -137,7 +143,7 @@
                 <button type="submit" class="px-5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg transition-colors">
                     Apply Filters
                 </button>
-                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'from_date', 'to_date']))
+                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'from_date', 'to_date']))
                     <a href="{{ route('admin.work_orders.index', ['tab' => $currentTab, 'per_page' => $perPage]) }}" class="px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">
                         Reset Filters
                     </a>
@@ -147,21 +153,31 @@
     </div>
 
     <!-- Bulk Allocation Bar -->
+    <!-- Bulk Allocation Bar -->
     <div x-show="selectedOrders.length > 0" x-cloak class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
         <div class="flex items-center text-xs font-semibold text-indigo-900">
             <span x-text="selectedOrders.length" class="mr-1 font-bold text-sm"></span> orders selected for bulk allocation
         </div>
-        <form method="POST" action="{{ route('admin.work_orders.bulk-allocate') }}" class="flex items-center gap-2">
+        <form method="POST" action="{{ route('admin.work_orders.bulk-allocate') }}" class="flex flex-wrap items-center gap-2">
             @csrf
             <template x-for="id in selectedOrders" :key="id">
                 <input type="hidden" name="order_ids[]" :value="id">
             </template>
+            
+            <!-- Craftsman Dropdown -->
             <select name="craftsman_id" required class="px-3 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
                 <option value="">-- Choose Craftsman --</option>
                 @foreach($craftsmen as $craftsman)
                     <option value="{{ $craftsman->id }}">{{ $craftsman->name }} ({{ $craftsman->mobile }})</option>
                 @endforeach
             </select>
+
+            <!-- Custom Due Date Input for Bulk Allocation -->
+            <div class="flex items-center gap-1">
+                <label class="text-2xs uppercase font-bold text-indigo-900">Due Date:</label>
+                <input type="date" name="due_date" class="px-2 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+            </div>
+
             <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
                 Allocate Selected
             </button>
@@ -180,7 +196,6 @@
                         <th class="px-4 py-3.5">Image</th>
                         <th class="px-4 py-3.5">Order / Ref No</th>
                         <th class="px-4 py-3.5">Product & Design Code (Nickname)</th>
-                        <th class="px-4 py-3.5">Category</th>
                         <th class="px-4 py-3.5">Weight / Qty</th>
                         <th class="px-4 py-3.5">Craftsman</th>
                         <th class="px-4 py-3.5">Status</th>
@@ -216,19 +231,12 @@
                                 <div class="font-medium text-slate-800">{{ $order->product_name }}</div>
                                 <div class="text-xs font-mono font-semibold text-indigo-600 flex items-center gap-1 mt-0.5">
                                     <span>{{ $order->design_code }}</span>
-                                    @if($order->design_nickname)
+                                    @if($order->effective_nickname)
                                         <span class="font-sans text-slate-500 font-normal">
-                                            ({{ $order->design_nickname }})
+                                            ({{ $order->effective_nickname }})
                                         </span>
                                     @endif
                                 </div>
-                            </td>
-
-                            <td class="px-4 py-3">
-                                <div class="text-slate-700 font-medium">{{ $order->category }}</div>
-                                @if($order->subcategory)
-                                    <div class="text-xs text-slate-400">{{ $order->subcategory }}</div>
-                                @endif
                             </td>
 
                             <td class="px-4 py-3">
@@ -310,7 +318,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="px-6 py-12 text-center text-slate-400">
+                            <td colspan="9" class="px-6 py-12 text-center text-slate-400">
                                 No work orders found matching this filter criteria.
                             </td>
                         </tr>

@@ -40,9 +40,16 @@ Route::middleware(['web', 'auth:admin', 'single.admin.session'])->prefix('admin'
 
     Route::resource('craftsmen', AdminCraftsmanController::class);
 
-    // Custom endpoints before resource
+    // Custom static endpoints before dynamic or resource routes
     Route::get('design-codes/unassigned', [AdminDesignCodeController::class, 'unassigned'])->name('design_codes.unassigned');
+    
+    // Import Routes MUST be placed before work-orders/{workOrder} parameters
+    Route::get('work-orders/import', [AdminWorkOrderController::class, 'importForm'])->name('work_orders.import.form');
+    Route::post('work-orders/import', [AdminWorkOrderController::class, 'import'])->name('work_orders.import');
+
     Route::post('work-orders/bulk-allocate', [AdminWorkOrderController::class, 'bulkAllocate'])->name('work_orders.bulk-allocate');
+
+    // Dynamic parameter routes
     Route::get('work-orders/{workOrder}/print', [AdminWorkOrderController::class, 'print'])->name('work_orders.print');
     Route::post('work-orders/{workOrder}/allocate', [AdminWorkOrderController::class, 'allocate'])->name('work_orders.allocate');
     Route::post('work-orders/{workOrder}/undo', [AdminWorkOrderController::class, 'undoAllocation'])->name('work_orders.undo');

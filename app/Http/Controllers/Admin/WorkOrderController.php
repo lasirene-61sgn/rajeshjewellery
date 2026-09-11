@@ -9,6 +9,7 @@ use App\Models\WorkOrder;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class WorkOrderController extends Controller
@@ -32,7 +33,13 @@ class WorkOrderController extends Controller
                   ->orWhere('reference_no', 'like', "%{$search}%")
                   ->orWhere('product_name', 'like', "%{$search}%")
                   ->orWhere('design_code', 'like', "%{$search}%")
-                  ->orWhere('design_nickname', 'like', "%{$search}%");
+                  ->orWhere('design_nickname', 'like', "%{$search}%")
+                  ->orWhereExists(function ($sub) use ($search) {
+                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                          ->from('design_codes')
+                          ->whereColumn('design_codes.code', 'work_orders.design_code')
+                          ->where('design_codes.nickname', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -54,7 +61,18 @@ class WorkOrderController extends Controller
         }
 
         if ($request->filled('nickname')) {
-            $query->where('design_nickname', 'like', "%" . trim($request->nickname) . "%");
+            $nickFilter = trim($request->nickname);
+            $query->where(function ($q) use ($nickFilter) {
+                // Match work orders that have this nickname directly
+                $q->where('design_nickname', 'like', "%{$nickFilter}%")
+                  // OR match via the design_codes master table
+                  ->orWhereExists(function ($sub) use ($nickFilter) {
+                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                          ->from('design_codes')
+                          ->whereColumn('design_codes.code', 'work_orders.design_code')
+                          ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                  });
+            });
         }
 
         // 3. Date Filters
@@ -91,7 +109,7 @@ class WorkOrderController extends Controller
         // Options for Filter Dropdowns
         $categories    = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->sort()->values();
         $subcategories = WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->pluck('subcategory')->sort()->values();
-        $nicknames     = WorkOrder::whereNotNull('design_nickname')->where('design_nickname', '!=', '')->distinct()->pluck('design_nickname')->sort()->values();
+        $nicknames     = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
         $craftsmen     = Craftsman::orderBy('name')->get();
         $designCodes   = DesignCode::orderBy('code')->get();
 
@@ -157,13 +175,15 @@ class WorkOrderController extends Controller
             $designCodeStr = trim($validated['design_code']);
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
             
-            if (empty($validated['design_nickname']) && $existingDesign && $existingDesign->nickname) {
+            // Auto-fill nickname from master table if not provided
+            if (empty($validated['design_nickname']) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
                 $validated['design_nickname'] = $existingDesign->nickname;
             }
 
+            // Only create design code entry; don't set nickname = code
             DesignCode::firstOrCreate(
                 ['code' => $designCodeStr],
-                ['nickname' => $validated['design_nickname'] ?: $designCodeStr]
+                ['nickname' => $validated['design_nickname'] ?: null]
             );
         }
 
@@ -225,13 +245,15 @@ class WorkOrderController extends Controller
             $designCodeStr = trim($validated['design_code']);
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
             
-            if (empty($validated['design_nickname']) && $existingDesign && $existingDesign->nickname) {
+            // Auto-fill nickname from master table if not provided
+            if (empty($validated['design_nickname']) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
                 $validated['design_nickname'] = $existingDesign->nickname;
             }
 
+            // Only create design code entry; don't set nickname = code
             DesignCode::firstOrCreate(
                 ['code' => $designCodeStr],
-                ['nickname' => $validated['design_nickname'] ?: $designCodeStr]
+                ['nickname' => $validated['design_nickname'] ?: null]
             );
         }
 
@@ -262,13 +284,21 @@ class WorkOrderController extends Controller
             'order_ids'    => ['required', 'array'],
             'order_ids.*'  => ['exists:work_orders,id'],
             'craftsman_id' => ['required', 'exists:craftsmen,id'],
+            'due_date'     => ['nullable', 'date'], // Optional custom bulk due date
         ]);
 
-        WorkOrder::whereIn('id', $request->order_ids)->update([
+        $updateData = [
             'craftsman_id' => $request->craftsman_id,
             'status'       => 'allocated',
             'allocated_at' => Carbon::now(),
-        ]);
+        ];
+
+        // If a due date is specified during bulk allocation, update it as well
+        if ($request->filled('due_date')) {
+            $updateData['due_date'] = $request->due_date;
+        }
+
+        WorkOrder::whereIn('id', $request->order_ids)->update($updateData);
 
         return back()->with('success', count($request->order_ids) . ' work orders successfully allocated.');
     }
@@ -332,5 +362,143 @@ class WorkOrderController extends Controller
     {
         $workOrder->delete();
         return redirect()->route('admin.work_orders.index')->with('success', 'Work order deleted.');
+    }
+
+    public function importForm(): View
+    {
+        $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
+        return view('admin.work_orders.import', compact('backUrl'));
+    }
+
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:20240'],
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->getRealPath();
+
+        $rows = [];
+        if (($handle = fopen($path, 'r')) !== false) {
+            $firstLine = fgets($handle);
+            rewind($handle);
+            
+            $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
+            $header = fgetcsv($handle, 1000, $delimiter);
+            
+            $normalizedHeader = $header ? array_map(function($h) {
+                return strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', $h)));
+            }, $header) : [];
+
+            while (($row = fgetcsv($handle, 1000, $delimiter)) !== false) {
+                if (!empty($normalizedHeader) && count($normalizedHeader) === count($row)) {
+                    $rows[] = array_combine($normalizedHeader, $row);
+                }
+            }
+            fclose($handle);
+        }
+
+        $importedCount = 0;
+        $skippedCount = 0;
+        $year = date('Y');
+
+        foreach ($rows as $cleanRow) {
+            $getVal = function(array $keys) use ($cleanRow) {
+                foreach ($keys as $key) {
+                    $lowerKey = strtolower(trim($key));
+                    if (array_key_exists($lowerKey, $cleanRow)) {
+                        $val = trim($cleanRow[$lowerKey]);
+                        return $val !== '' ? $val : null;
+                    }
+                }
+                return null;
+            };
+
+            $referenceNo  = $getVal(['order no', 'orderno', 'ref no', 'reference no']);
+            
+            // Skip import if reference number already exists in database
+            if (!empty($referenceNo) && WorkOrder::where('reference_no', $referenceNo)->exists()) {
+                $skippedCount++;
+                continue;
+            }
+
+            $unitType     = $getVal(['order type', 'ordertype', 'unit', 'unit type']) ?? 'pcs';
+            $orderDateStr = $getVal(['order date', 'orderdate', 'date']);
+            $productName  = $getVal(['product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
+            $designCode   = $getVal(['design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
+            
+            // Capture custom nickname from Excel if present
+            $excelNickname = $getVal(['nickname', 'design nickname', 'design_nickname', 'alias']);
+
+            $weight       = $getVal(['weight', 'target weight', 'wt']);
+            $size         = $getVal(['size']);
+            $quantity     = $getVal(['quantity', 'qty', 'pcs']);
+            $jobType      = $getVal(['balance', 'job type', 'jobtype']);
+            $instructions = $getVal(['remarks', 'instruction', 'instructions', 'note']);
+
+            $parsedDate = now();
+            if (!empty($orderDateStr)) {
+                try {
+                    $parsedDate = Carbon::createFromFormat('d/m/Y', trim($orderDateStr));
+                } catch (\Exception $e) {
+                    try {
+                        $parsedDate = Carbon::parse($orderDateStr);
+                    } catch (\Exception $ex) {
+                        $parsedDate = now();
+                    }
+                }
+            }
+
+            $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
+            $nextNumber = $lastOrder ? ((int) substr($lastOrder->work_order_no, -4)) + 1 : ($importedCount + 1);
+            $workOrderNo = 'WO-' . $year . '_' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+
+            $designCodeStr = !empty($designCode) ? $designCode : 'DEFAULT';
+            
+            $existingDesign = DesignCode::where('code', $designCodeStr)->first();
+            
+            if (!empty($excelNickname)) {
+                $nickname = $excelNickname;
+            } elseif ($existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
+                $nickname = $existingDesign->nickname;
+            } else {
+                // Don't use the design code as a nickname — leave it null
+                $nickname = null;
+            }
+
+            // Register the design code in master table; only set nickname if it's a real name
+            DesignCode::firstOrCreate(
+                ['code' => $designCodeStr],
+                ['nickname' => $nickname]
+            );
+
+            // If an explicit nickname was provided in Excel, update the master too
+            if (!empty($excelNickname) && $existingDesign) {
+                $existingDesign->update(['nickname' => $excelNickname]);
+            }
+
+            WorkOrder::create([
+                'work_order_no'   => $workOrderNo,
+                'reference_no'    => $referenceNo,
+                'product_name'    => $productName,
+                'design_code'     => $designCodeStr,
+                'design_nickname' => $nickname,
+                'unit_type'       => $unitType,
+                'quantity'        => is_numeric($quantity) ? (int) $quantity : 1,
+                'category'        => null,
+                'size'            => $size,
+                'hallmark_purity' => null,
+                'target_weight'   => is_numeric($weight) ? (float) $weight : 0.000,
+                'job_type'        => $jobType,
+                'instructions'    => $instructions,
+                'status'          => 'pending',
+                'created_at'      => $parsedDate,
+            ]);
+            $importedCount++;
+        }
+
+        $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
+        return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders. ({$skippedCount} duplicates skipped).");
     }
 }

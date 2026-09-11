@@ -26,9 +26,14 @@ class CraftsmanController extends Controller
         foreach ($workOrderCodes as $wo) {
             $code = trim($wo->design_code);
             if (!empty($code)) {
+                // Only set nickname if the work order has a real nickname (not equal to the code)
+                $realNickname = (!empty($wo->design_nickname) && $wo->design_nickname !== $code)
+                    ? $wo->design_nickname
+                    : null;
+
                 DesignCode::firstOrCreate(
                     ['code' => $code],
-                    ['nickname' => $wo->design_nickname ?: $code]
+                    ['nickname' => $realNickname]
                 );
             }
         }
@@ -118,10 +123,20 @@ class CraftsmanController extends Controller
 
         // Create new design code if typed inline
         if ($request->filled('new_design_code')) {
+            $codeStr = trim($request->new_design_code);
+            $nickStr = $request->filled('new_design_nickname') ? trim($request->new_design_nickname) : null;
+            // Don't use the code itself as nickname
+            if ($nickStr === $codeStr) {
+                $nickStr = null;
+            }
             $newDesign = DesignCode::firstOrCreate(
-                ['code' => trim($request->new_design_code)],
-                ['nickname' => $request->new_design_nickname ?: trim($request->new_design_code)]
+                ['code' => $codeStr],
+                ['nickname' => $nickStr]
             );
+            // If a real nickname was provided and the design already existed, update it
+            if ($nickStr && $newDesign->wasRecentlyCreated === false) {
+                $newDesign->update(['nickname' => $nickStr]);
+            }
             $assignedIds[] = $newDesign->id;
         }
 
@@ -178,10 +193,20 @@ class CraftsmanController extends Controller
 
         // Add inline new design code if entered
         if ($request->filled('new_design_code')) {
+            $codeStr = trim($request->new_design_code);
+            $nickStr = $request->filled('new_design_nickname') ? trim($request->new_design_nickname) : null;
+            // Don't use the code itself as nickname
+            if ($nickStr === $codeStr) {
+                $nickStr = null;
+            }
             $newDesign = DesignCode::firstOrCreate(
-                ['code' => trim($request->new_design_code)],
-                ['nickname' => $request->new_design_nickname ?: trim($request->new_design_code)]
+                ['code' => $codeStr],
+                ['nickname' => $nickStr]
             );
+            // If a real nickname was provided and the design already existed, update it
+            if ($nickStr && $newDesign->wasRecentlyCreated === false) {
+                $newDesign->update(['nickname' => $nickStr]);
+            }
             $assignedIds[] = $newDesign->id;
         }
 

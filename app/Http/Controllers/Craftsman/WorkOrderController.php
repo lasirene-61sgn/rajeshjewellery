@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Craftsman;
 
 use App\Http\Controllers\Controller;
+use App\Models\DesignCode;
 use App\Models\WorkOrder;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -29,7 +30,13 @@ class WorkOrderController extends Controller
                 $q->where('work_order_no', 'like', "%{$search}%")
                   ->orWhere('reference_no', 'like', "%{$search}%")
                   ->orWhere('product_name', 'like', "%{$search}%")
-                  ->orWhere('design_nickname', 'like', "%{$search}%");
+                  ->orWhere('design_nickname', 'like', "%{$search}%")
+                  ->orWhereExists(function ($sub) use ($search) {
+                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                          ->from('design_codes')
+                          ->whereColumn('design_codes.code', 'work_orders.design_code')
+                          ->where('design_codes.nickname', 'like', "%{$search}%");
+                  });
             });
         }
         if ($request->filled('category')) {
@@ -42,7 +49,16 @@ class WorkOrderController extends Controller
             $query->where('design_code', $request->design_code);
         }
         if ($request->filled('nickname')) {
-            $query->where('design_nickname', 'like', "%" . trim($request->nickname) . "%");
+            $nickFilter = trim($request->nickname);
+            $query->where(function ($q) use ($nickFilter) {
+                $q->where('design_nickname', 'like', "%{$nickFilter}%")
+                  ->orWhereExists(function ($sub) use ($nickFilter) {
+                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                          ->from('design_codes')
+                          ->whereColumn('design_codes.code', 'work_orders.design_code')
+                          ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                  });
+            });
         }
         if ($request->filled('date_from')) {
             $query->whereDate('created_at', '>=', $request->date_from);
@@ -75,7 +91,18 @@ class WorkOrderController extends Controller
         // Also fetch unique categories
         $categories = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->filter()->values();
         $subcategories = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->pluck('subcategory')->filter()->values();
-        $nicknames = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('design_nickname')->where('design_nickname', '!=', '')->distinct()->pluck('design_nickname')->filter()->values();
+
+        // Get nicknames from the design_codes master table for codes assigned to this craftsman
+        $nicknames = DesignCode::whereNotNull('nickname')
+            ->where('nickname', '!=', '')
+            ->whereColumn('nickname', '!=', 'code')
+            ->whereHas('craftsmen', function ($q) use ($craftsmanId) {
+                $q->where('craftsmen.id', $craftsmanId);
+            })
+            ->orderBy('nickname')
+            ->pluck('nickname')
+            ->unique()
+            ->values();
 
         $workOrders = $query->paginate(15)->withQueryString();
 

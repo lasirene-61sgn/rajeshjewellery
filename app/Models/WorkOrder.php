@@ -67,27 +67,7 @@ class WorkOrder extends Model
         ];
     }
 
-    #[Override]
-    // protected static function booted()
-    // {
-    //     static::creating(function(WorkOrder $order){
-    //         if(empty($order->work_order_no)){
-    //             $year = Carbon::now()->format('Y');
-    //             $latestOrder = DB::table('work_orders')
-    //             ->where('work_order_no', 'like', 'WO-{$year}-%')
-    //             ->orderByDesc('id')
-    //             ->value('work_order_no');
-
-    //             $nextNumber = 1;
-    //             if($latestOrder){
-    //                 $parts = explode('-', $latestOrder);
-    //                 $nextNumber = ((int) end($parts)) + 1;
-    //             }
-
-    //             $order->work_order_no = sprintf('WO-%s-%04d', $year, $nextNumber);
-    //         }
-    //     });
-    // }
+    
 
     protected static function booted(): void
     {
@@ -154,5 +134,23 @@ class WorkOrder extends Model
                         ->where('due_date', '<', $today);
                 });
             });
+    }
+
+    public function getEffectiveNicknameAttribute(): ?string
+    {
+        // 1. If work order has its own nickname (and it's not just the code), use it
+        if (!empty($this->design_nickname) && $this->design_nickname !== $this->design_code) {
+            return $this->design_nickname;
+        }
+
+        // 2. Otherwise, look it up dynamically from the DesignCode master table
+        $master = DB::table('design_codes')->where('code', $this->design_code)->first();
+
+        // Only return nickname if it's a real name, not the code itself
+        if ($master && !empty($master->nickname) && $master->nickname !== $master->code) {
+            return $master->nickname;
+        }
+
+        return null;
     }
 }
