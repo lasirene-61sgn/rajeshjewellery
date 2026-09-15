@@ -12,7 +12,7 @@ class Craftsman extends Authenticatable
     protected $table = 'craftsmen';
 
     protected $fillable = [
-        'name', 'email', 'password', 'session_id', 'is_active', 'mobile'
+        'name', 'email', 'password', 'plain_password', 'session_id', 'is_active', 'mobile'
     ];
 
     protected $hidden = [

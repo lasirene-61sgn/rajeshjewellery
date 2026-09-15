@@ -78,6 +78,9 @@
                             <td class="px-4 py-3.5">
                                 <div class="text-slate-800 font-medium">{{ $craftsman->mobile }}</div>
                                 <div class="text-xs text-slate-400">{{ $craftsman->email ?? 'No email' }}</div>
+                                @if($craftsman->plain_password)
+                                    <div class="text-xs text-slate-500 mt-1">Pwd: <span class="font-mono bg-slate-100 px-1 rounded">{{ $craftsman->plain_password }}</span></div>
+                                @endif
                             </td>
                             <td class="px-4 py-3.5">
                                 <div class="flex flex-wrap gap-1 max-w-md">

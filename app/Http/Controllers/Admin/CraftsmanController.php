@@ -105,6 +105,7 @@ class CraftsmanController extends Controller
             'new_design_nickname' => ['nullable', 'string', 'max:100'],
         ]);
 
+        $validated['plain_password'] = $validated['password'];
         $validated['password'] = bcrypt($validated['password']);
         $validated['is_active'] = $request->boolean('is_active', true);
 
@@ -171,6 +172,7 @@ class CraftsmanController extends Controller
         ]);
 
         if (!empty($validated['password'])) {
+            $validated['plain_password'] = $validated['password'];
             $validated['password'] = bcrypt($validated['password']);
         } else {
             unset($validated['password']);
