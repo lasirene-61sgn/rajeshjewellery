@@ -23,6 +23,12 @@
         </div>
 
         <div class="flex items-center gap-2">
+            <form action="{{ route('admin.craftsmen.auto-assign', $craftsman) }}" method="POST" class="inline">
+                @csrf
+                <button type="submit" onclick="return confirm('Are you sure you want to auto-assign all pending orders for this craftsman\'s design codes?');" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 shadow-sm transition-colors">
+                    Assign Directly
+                </button>
+            </form>
             <a href="{{ route('admin.craftsmen.edit', $craftsman) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>

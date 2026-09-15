@@ -10,9 +10,17 @@
             <h1 class="text-2xl font-bold text-slate-800">Edit Craftsman: {{ $craftsman->name }}</h1>
             <p class="text-sm text-slate-500">Update account credentials, status, and mapped design codes.</p>
         </div>
-        <a href="{{ route('admin.craftsmen.index') }}" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">
-            Back to List
-        </a>
+        <div class="flex items-center gap-2">
+            <form action="{{ route('admin.craftsmen.auto-assign', $craftsman) }}" method="POST" class="inline">
+                @csrf
+                <button type="submit" onclick="return confirm('Are you sure you want to auto-assign all pending orders for this craftsman\'s design codes?');" class="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 shadow-sm">
+                    Assign Directly
+                </button>
+            </form>
+            <a href="{{ route('admin.craftsmen.index') }}" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">
+                Back to List
+            </a>
+        </div>
     </div>
 
     <!-- Form Card -->

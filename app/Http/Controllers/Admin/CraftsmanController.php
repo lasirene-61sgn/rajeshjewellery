@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Craftsman;
 use App\Models\DesignCode;
 use App\Models\WorkOrder;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -221,5 +222,31 @@ class CraftsmanController extends Controller
         $craftsman->delete();
 
         return redirect()->route('admin.craftsmen.index')->with('success', 'Craftsman deleted successfully.');
+    }
+
+    public function autoAssign(Craftsman $craftsman): RedirectResponse
+    {
+        $designCodes = $craftsman->designCodes()->pluck('code')->toArray();
+        
+        if (empty($designCodes)) {
+            return redirect()->back()->withErrors(['error' => 'Craftsman has no design codes assigned.']);
+        }
+
+        $pendingOrders = WorkOrder::whereIn('design_code', $designCodes)
+            ->where('status', 'pending')
+            ->get();
+
+        $allocatedCount = $pendingOrders->count();
+        $missingImagesCount = $pendingOrders->whereNull('design_image')->count();
+
+        if ($allocatedCount > 0) {
+            WorkOrder::whereIn('id', $pendingOrders->pluck('id'))->update([
+                'craftsman_id' => $craftsman->id,
+                'status' => 'in_process',
+                'allocated_at' => Carbon::now(),
+            ]);
+        }
+
+        return redirect()->back()->with('success', "{$allocatedCount} orders have been allocated and sent to the In Process tab. {$missingImagesCount} images are not added.");
     }
 }

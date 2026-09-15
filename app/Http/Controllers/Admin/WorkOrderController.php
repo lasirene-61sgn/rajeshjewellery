@@ -182,11 +182,31 @@ class WorkOrderController extends Controller
                     $y = 30;
                     $text = ' 916 SEAL ';
                     
+                    $scale = 3; 
+                    
+                    $font = 5;
+                    $fontWidth = imagefontwidth($font);
+                    $fontHeight = imagefontheight($font);
+                    
+                    $textW = strlen($text) * $fontWidth;
+                    $textH = $fontHeight;
+                    
+                    $scaledW = $textW * $scale;
+                    $scaledH = $textH * $scale;
+                    
+                    $smallImg = imagecreatetruecolor($textW, $textH);
+                    $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
+                    $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
+                    
+                    imagefill($smallImg, 0, 0, $bgColorSmall);
+                    imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
+                    
+                    $padding = 10;
                     $bgColor = imagecolorallocate($img, 245, 158, 11); 
-                    $textColor = imagecolorallocate($img, 255, 255, 255); 
-
-                    imagefilledrectangle($img, $x - 5, $y - 5, $x + (strlen($text) * 9), $y + 20, $bgColor);
-                    imagestring($img, 5, $x, $y, $text, $textColor);
+                    imagefilledrectangle($img, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
+                    
+                    imagecopyresampled($img, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
+                    imagedestroy($smallImg);
 
                     ob_start();
                     match($mime) {
@@ -211,14 +231,19 @@ class WorkOrderController extends Controller
         $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
         $nextNumber = $lastOrder ? ((int) substr($lastOrder->work_order_no, -4)) + 1 : 1;
         $validated['work_order_no'] = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        
         $validated['status'] = 'pending';
 
+        // Auto-assign craftsman if design code is already linked to one
         if (!empty($validated['design_code'])) {
             $designCodeStr = trim($validated['design_code']);
-            $existingDesign = DesignCode::where('code', $designCodeStr)->first();
+            $designCodeModel = DesignCode::with('craftsmen')->where('code', $designCodeStr)->first();
 
-            if (empty($validated['design_nickname'] ?? null) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
-                $validated['design_nickname'] = $existingDesign->nickname;
+            if ($designCodeModel && $designCodeModel->craftsmen->isNotEmpty()) {
+                // Automatically assign to the first linked craftsman
+                $validated['craftsman_id'] = $designCodeModel->craftsmen->first()->id;
+                $validated['status'] = 'allocated';
+                $validated['allocated_at'] = Carbon::now();
             }
 
             DesignCode::firstOrCreate(
@@ -230,7 +255,7 @@ class WorkOrderController extends Controller
         WorkOrder::create($validated);
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
-        return redirect($backUrl)->with('success', 'Work order created successfully.');
+        return redirect($backUrl)->with('success', 'Work order created successfully and auto-allocated if mapped.');
     }
 
     public function show(Request $request, WorkOrder $workOrder): View
@@ -300,11 +325,31 @@ class WorkOrderController extends Controller
                     $y = 30;
                     $text = ' 916 SEAL ';
                     
+                    $scale = 3; 
+                    
+                    $font = 5;
+                    $fontWidth = imagefontwidth($font);
+                    $fontHeight = imagefontheight($font);
+                    
+                    $textW = strlen($text) * $fontWidth;
+                    $textH = $fontHeight;
+                    
+                    $scaledW = $textW * $scale;
+                    $scaledH = $textH * $scale;
+                    
+                    $smallImg = imagecreatetruecolor($textW, $textH);
+                    $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
+                    $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
+                    
+                    imagefill($smallImg, 0, 0, $bgColorSmall);
+                    imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
+                    
+                    $padding = 10;
                     $bgColor = imagecolorallocate($img, 245, 158, 11); 
-                    $textColor = imagecolorallocate($img, 255, 255, 255); 
-
-                    imagefilledrectangle($img, $x - 5, $y - 5, $x + (strlen($text) * 9), $y + 20, $bgColor);
-                    imagestring($img, 5, $x, $y, $text, $textColor);
+                    imagefilledrectangle($img, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
+                    
+                    imagecopyresampled($img, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
+                    imagedestroy($smallImg);
 
                     ob_start();
                     match($mime) {
@@ -435,10 +480,38 @@ class WorkOrderController extends Controller
         return back()->with('success', "Order {$workOrder->work_order_no} approved and marked completed.");
     }
 
+    public function bulkComplete(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'order_ids' => ['required', 'array'],
+            'order_ids.*' => ['exists:work_orders,id']
+        ]);
+
+        WorkOrder::whereIn('id', $request->order_ids)->update([
+            'status'       => 'completed',
+            'approved_at'  => Carbon::now(),
+        ]);
+
+        return back()->with('success', count($request->order_ids) . ' work orders marked as completed.');
+    }
+
     public function print(WorkOrder $workOrder): View
     {
         $workOrder->load('craftsman');
-        return view('admin.work_orders.print', compact('workOrder'));
+        $workOrders = collect([$workOrder]);
+        return view('admin.work_orders.print', compact('workOrders', 'workOrder'));
+    }
+
+    public function bulkPrint(Request $request): View
+    {
+        $request->validate([
+            'order_ids'   => ['required', 'array'],
+            'order_ids.*' => ['exists:work_orders,id'],
+        ]);
+
+        $workOrders = WorkOrder::with('craftsman')->whereIn('id', $request->order_ids)->get();
+
+        return view('admin.work_orders.print', compact('workOrders'));
     }
 
     public function destroy(WorkOrder $workOrder): RedirectResponse
@@ -457,6 +530,7 @@ class WorkOrderController extends Controller
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:20240'],
+            'due_date_days' => ['required', 'integer', 'between:4,7'],
         ]);
 
         $file = $request->file('file');
@@ -531,6 +605,10 @@ class WorkOrderController extends Controller
                 }
             }
 
+            // Automatically set Due Date to the requested days after TODAY (not the old order date)
+            $dueDateDays = (int) $request->due_date_days;
+            $dueDate = now()->addDays($dueDateDays);
+
             $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
             $nextNumber = $lastOrder ? ((int) substr($lastOrder->work_order_no, -4)) + 1 : ($importedCount + 1);
             $workOrderNo = 'WO-' . $year . '_' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
@@ -556,6 +634,16 @@ class WorkOrderController extends Controller
                 $existingDesign->update(['nickname' => $excelNickname]);
             }
 
+            // Check if design code is mapped to a craftsman for auto-allocation
+            $craftsmanId = null;
+            $status = 'pending';
+            $designCodeModel = DesignCode::with('craftsmen')->where('code', $designCodeStr)->first();
+
+            if ($designCodeModel && $designCodeModel->craftsmen->isNotEmpty()) {
+                $craftsmanId = $designCodeModel->craftsmen->first()->id;
+                $status = 'in_process'; // Automatically shifts to in_process as requested
+            }
+
             WorkOrder::create([
                 'work_order_no'   => $workOrderNo,
                 'reference_no'    => $referenceNo,
@@ -571,13 +659,16 @@ class WorkOrderController extends Controller
                 'target_weight'   => is_numeric($weight) ? (float) $weight : 0.000,
                 'job_type'        => $jobType,
                 'instructions'    => $instructions,
-                'status'          => 'pending',
+                'craftsman_id'    => $craftsmanId,
+                'status'          => $status,
+                'due_date'        => $dueDate, // Populated automatically 7 days past order date
+                'allocated_at'    => $craftsmanId ? Carbon::now() : null,
                 'created_at'      => $parsedDate,
             ]);
             $importedCount++;
         }
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
-        return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders. ({$skippedCount} duplicates skipped).");
+        return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders with calculated due dates. ({$skippedCount} duplicates skipped).");
     }
 }

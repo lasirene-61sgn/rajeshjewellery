@@ -66,65 +66,109 @@
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Order No, Product, Ref, Code, Nickname..." class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300">
             </div>
 
-            <!-- Category Filter -->
-            <div>
+            <!-- Category Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('category') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Category</label>
-                <select name="category" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300 bg-white">
-                    <option value="">All Categories</option>
-                    @foreach($categories as $cat)
-                        <option value="{{ $cat }}" {{ request('category') === $cat ? 'selected' : '' }}>{{ $cat }}</option>
-                    @endforeach
-                </select>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selected || 'All Categories'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="category" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="categorySearch" placeholder="Search category..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Categories</button>
+                        <template x-for="category in filteredCategories" :key="category">
+                            <button type="button" @click="selected = category; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === category ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="category"></button>
+                        </template>
+                    </div>
+                </div>
             </div>
 
-            <!-- Subcategory Filter -->
-            <div>
+            <!-- Subcategory Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('subcategory') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Subcategory</label>
-                <select name="subcategory" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300 bg-white">
-                    <option value="">All Subcategories</option>
-                    @foreach($subcategories as $subcat)
-                        <option value="{{ $subcat }}" {{ request('subcategory') === $subcat ? 'selected' : '' }}>{{ $subcat }}</option>
-                    @endforeach
-                </select>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selected || 'All Subcategories'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="subcategory" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="subcategorySearch" placeholder="Search subcategory..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Subcategories</button>
+                        <template x-for="subcat in filteredSubcategories" :key="subcat">
+                            <button type="button" @click="selected = subcat; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === subcat ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="subcat"></button>
+                        </template>
+                    </div>
+                </div>
             </div>
 
-            <!-- Craftsman Filter -->
-            <div>
+            <!-- Craftsman Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('craftsman_id') }}', get selectedName() { if(!this.selected) return ''; const c = @js($craftsmen ?? []).find(c => c.id == this.selected); return c ? c.name : ''; } }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Craftsman</label>
-                <select name="craftsman_id" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300 bg-white">
-                    <option value="">All Craftsmen</option>
-                    @foreach($craftsmen as $craftsman)
-                        <option value="{{ $craftsman->id }}" {{ request('craftsman_id') == $craftsman->id ? 'selected' : '' }}>
-                            {{ $craftsman->name }}
-                        </option>
-                    @endforeach
-                </select>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selectedName || 'All Craftsmen'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="craftsman_id" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="craftsmanSearch" placeholder="Search craftsman..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Craftsmen</button>
+                        <template x-for="craftsman in filteredCraftsmen" :key="craftsman.id">
+                            <button type="button" @click="selected = craftsman.id; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected == craftsman.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="craftsman.name"></button>
+                        </template>
+                    </div>
+                </div>
             </div>
 
-            <!-- Design Code Filter Dropdown -->
-            <div>
+            <!-- Design Code Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('design_code') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Design Code</label>
-                <select name="design_code" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300 bg-white">
-                    <option value="">All Design Codes</option>
-                    @foreach($designCodes as $design)
-                        <option value="{{ $design->code }}" {{ request('design_code') === $design->code ? 'selected' : '' }}>
-                            {{ $design->code }}
-                        </option>
-                    @endforeach
-                </select>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selected || 'All Design Codes'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="design_code" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="designCodeSearch" placeholder="Search code..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Design Codes</button>
+                        <template x-for="dc in filteredDesignCodes" :key="dc.code">
+                            <button type="button" @click="selected = dc.code; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === dc.code ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="dc.code"></button>
+                        </template>
+                    </div>
+                </div>
             </div>
 
-            <!-- Nickname Filter Dropdown -->
-            <div>
+            <!-- Nickname Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('nickname') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Nickname</label>
-                <select name="nickname" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300 bg-white">
-                    <option value="">All Nicknames</option>
-                    @foreach($nicknames as $nick)
-                        <option value="{{ $nick }}" {{ request('nickname') === $nick ? 'selected' : '' }}>
-                            {{ $nick }}
-                        </option>
-                    @endforeach
-                </select>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selected || 'All Nicknames'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="nickname" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="nicknameSearch" placeholder="Search nickname..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Nicknames</button>
+                        <template x-for="nickname in filteredNicknames" :key="nickname">
+                            <button type="button" @click="selected = nickname; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === nickname ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="nickname"></button>
+                        </template>
+                    </div>
+                </div>
             </div>
 
             <!-- Date Filters -->
@@ -158,30 +202,54 @@
         <div class="flex items-center text-xs font-semibold text-indigo-900">
             <span x-text="selectedOrders.length" class="mr-1 font-bold text-sm"></span> orders selected for bulk allocation
         </div>
-        <form method="POST" action="{{ route('admin.work_orders.bulk-allocate') }}" class="flex flex-wrap items-center gap-2">
-            @csrf
-            <template x-for="id in selectedOrders" :key="id">
-                <input type="hidden" name="order_ids[]" :value="id">
-            </template>
-            
-            <!-- Craftsman Dropdown -->
-            <select name="craftsman_id" required class="px-3 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
-                <option value="">-- Choose Craftsman --</option>
-                @foreach($craftsmen as $craftsman)
-                    <option value="{{ $craftsman->id }}">{{ $craftsman->name }} ({{ $craftsman->mobile }})</option>
-                @endforeach
-            </select>
+        <div class="flex flex-wrap items-center gap-4">
+            @if(in_array($currentTab, ['pending', 'returned']))
+                <form method="POST" action="{{ route('admin.work_orders.bulk-allocate') }}" class="flex flex-wrap items-center gap-2 border-r border-indigo-200 pr-4">
+                    @csrf
+                    <template x-for="id in selectedOrders" :key="id">
+                        <input type="hidden" name="order_ids[]" :value="id">
+                    </template>
+                    
+                    <select name="craftsman_id" required class="px-3 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- Choose Craftsman --</option>
+                        @foreach($craftsmen as $craftsman)
+                            <option value="{{ $craftsman->id }}">{{ $craftsman->name }} ({{ $craftsman->mobile }})</option>
+                        @endforeach
+                    </select>
 
-            <!-- Custom Due Date Input for Bulk Allocation -->
-            <div class="flex items-center gap-1">
-                <label class="text-2xs uppercase font-bold text-indigo-900">Due Date:</label>
-                <input type="date" name="due_date" class="px-2 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
-            </div>
+                    <div class="flex items-center gap-1">
+                        <label class="text-2xs uppercase font-bold text-indigo-900">Due Date:</label>
+                        <input type="date" name="due_date" class="px-2 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+                    </div>
 
-            <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
-                Allocate Selected
-            </button>
-        </form>
+                    <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
+                        Allocate Selected
+                    </button>
+                </form>
+            @endif
+
+            @if(in_array($currentTab, ['allocated', 'in_process', 'for_approval']))
+                <form method="POST" action="{{ route('admin.work_orders.bulk-complete') }}" onsubmit="return confirm('Are you sure you want to mark the selected orders as completed?')" class="flex items-center">
+                    @csrf
+                    <template x-for="id in selectedOrders" :key="id">
+                        <input type="hidden" name="order_ids[]" :value="id">
+                    </template>
+                    <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm">
+                        Bulk Complete
+                    </button>
+                </form>
+            @endif
+
+            <form method="POST" action="{{ route('admin.work_orders.bulk-print') }}" class="flex items-center" target="_blank">
+                @csrf
+                <template x-for="id in selectedOrders" :key="id">
+                    <input type="hidden" name="order_ids[]" :value="id">
+                </template>
+                <button type="submit" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm">
+                    Bulk Print
+                </button>
+            </form>
+        </div>
     </div>
 
     <!-- Table -->
@@ -212,7 +280,7 @@
 
                             <td class="px-4 py-3">
                                 @if($order->design_image)
-                                    <img src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm">
+                                    <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}')" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
                                 @else
                                     <div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-medium border border-slate-200">
                                         N/A
@@ -297,7 +365,9 @@
                                             Approve
                                         </button>
                                     </form>
-
+                                @endif
+                                
+                                @if($order->status === 'for_approval' || ($order->status === 'completed' && \Carbon\Carbon::parse($order->approved_at ?? $order->updated_at)->addDays(60)->isFuture()))
                                     <button @click="openReturnModal({{ $order->id }}, '{{ $order->work_order_no }}')" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-semibold">
                                         Return
                                     </button>
@@ -401,6 +471,16 @@
         </div>
     </div>
 
+    <!-- Modal: Image Preview -->
+    <div x-show="imageModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.outside="imageModalOpen = false" class="relative max-w-3xl w-full p-2">
+            <button @click="imageModalOpen = false" class="absolute -top-10 right-0 text-white hover:text-slate-200 focus:outline-none">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <img :src="selectedImageUrl" class="w-full h-auto max-h-[85vh] object-contain rounded-xl shadow-2xl">
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -409,8 +489,43 @@
             selectedOrders: [],
             allocateModalOpen: false,
             returnModalOpen: false,
+            imageModalOpen: false,
+            selectedImageUrl: '',
             selectedOrderId: null,
             selectedOrderNo: '',
+
+            // Searchable Dropdown States
+            categorySearch: '',
+            subcategorySearch: '',
+            craftsmanSearch: '',
+            designCodeSearch: '',
+            nicknameSearch: '',
+
+            get filteredCategories() {
+                const categories = @js($categories ?? []);
+                if (!this.categorySearch) return categories;
+                return categories.filter(cat => cat.toLowerCase().includes(this.categorySearch.toLowerCase()));
+            },
+            get filteredSubcategories() {
+                const subcats = @js($subcategories ?? []);
+                if (!this.subcategorySearch) return subcats;
+                return subcats.filter(sub => sub.toLowerCase().includes(this.subcategorySearch.toLowerCase()));
+            },
+            get filteredCraftsmen() {
+                const craftsmen = @js($craftsmen ?? []);
+                if (!this.craftsmanSearch) return craftsmen;
+                return craftsmen.filter(c => c.name.toLowerCase().includes(this.craftsmanSearch.toLowerCase()));
+            },
+            get filteredDesignCodes() {
+                const designCodes = @js($designCodes ?? []);
+                if (!this.designCodeSearch) return designCodes;
+                return designCodes.filter(dc => dc.code.toLowerCase().includes(this.designCodeSearch.toLowerCase()));
+            },
+            get filteredNicknames() {
+                const nicknames = @js($nicknames ?? []);
+                if (!this.nicknameSearch) return nicknames;
+                return nicknames.filter(nn => nn.toLowerCase().includes(this.nicknameSearch.toLowerCase()));
+            },
 
             toggleSelectAll(e) {
                 if (e.target.checked) {
@@ -428,6 +543,10 @@
                 this.selectedOrderId = id;
                 this.selectedOrderNo = no;
                 this.returnModalOpen = true;
+            },
+            openImageModal(url) {
+                this.selectedImageUrl = url;
+                this.imageModalOpen = true;
             }
         }
     }

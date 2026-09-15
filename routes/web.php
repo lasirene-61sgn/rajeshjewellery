@@ -38,6 +38,7 @@ Route::middleware(['web', 'auth:admin', 'single.admin.session'])->prefix('admin'
         return response()->json(['status' => 'active']);
     })->name('heartbeat');
 
+    Route::post('craftsmen/{craftsman}/auto-assign', [AdminCraftsmanController::class, 'autoAssign'])->name('craftsmen.auto-assign');
     Route::resource('craftsmen', AdminCraftsmanController::class);
 
     // Custom static endpoints before dynamic or resource routes
@@ -48,8 +49,10 @@ Route::middleware(['web', 'auth:admin', 'single.admin.session'])->prefix('admin'
     Route::post('work-orders/import', [AdminWorkOrderController::class, 'import'])->name('work_orders.import');
 
     Route::post('work-orders/bulk-allocate', [AdminWorkOrderController::class, 'bulkAllocate'])->name('work_orders.bulk-allocate');
-
-    // Dynamic parameter routes
+    Route::post('work-orders/bulk-complete', [AdminWorkOrderController::class, 'bulkComplete'])->name('work_orders.bulk-complete');
+    Route::post('work-orders/bulk-print', [AdminWorkOrderController::class, 'bulkPrint'])->name('work_orders.bulk-print');
+    
+    // Explicit craftsman resource routes
     Route::get('work-orders/{workOrder}/print', [AdminWorkOrderController::class, 'print'])->name('work_orders.print');
     Route::post('work-orders/{workOrder}/allocate', [AdminWorkOrderController::class, 'allocate'])->name('work_orders.allocate');
     Route::post('work-orders/{workOrder}/undo', [AdminWorkOrderController::class, 'undoAllocation'])->name('work_orders.undo');
@@ -79,4 +82,10 @@ Route::prefix('craftsman')->name('craftsman.')->middleware(['web', 'auth:craftsm
     Route::get('work-orders/{workOrder}', [CraftsmanWorkOrderController::class, 'show'])->name('work-orders.show');
     Route::post('work-orders/{workOrder}/accept', [CraftsmanWorkOrderController::class, 'accept'])->name('work-orders.accept');
     Route::post('work-orders/{workOrder}/submit', [CraftsmanWorkOrderController::class, 'submitForApproval'])->name('work-orders.submit');
+    Route::post('work-orders/bulk-print', [CraftsmanWorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+    Route::post('work-orders/bulk-accept', [CraftsmanWorkOrderController::class, 'bulkAccept'])->name('work-orders.bulk-accept');
+    Route::post('work-orders/bulk-submit', [CraftsmanWorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
+
+
+
 });
