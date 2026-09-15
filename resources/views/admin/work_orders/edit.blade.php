@@ -20,12 +20,20 @@
 
         <div>
             <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Design Image</label>
+            
             @if($workOrder->design_image)
-                <div class="mb-2 flex items-center gap-3">
-                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Current Design" class="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm">
-                    <span class="text-xs text-slate-500">Upload new image to replace current one.</span>
-                </div>
+            <div class="relative inline-block mb-2">
+                <a href="{{ asset('storage/' . $workOrder->design_image) }}" target="_blank">
+                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design" class="w-16 h-16 object-cover rounded-lg border shadow-sm">
+                </a>
+                @if(stripos($workOrder->reference_no, 'ESO') !== false || $workOrder->seal)
+                <span class="absolute bottom-1 right-1 bg-amber-500 text-white text-[9px] font-bold px-1 rounded shadow">
+                    916 SEAL
+                </span>
+                @endif
+            </div>
             @endif
+            
             <input type="file" name="design_image" accept="image/*" class="w-full px-3 py-2 border rounded-lg text-sm text-slate-500 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
         </div>
 
@@ -63,7 +71,7 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Category *</label>
+                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Category</label>
                 <input type="text" name="category" value="{{ old('category', $workOrder->category) }}" placeholder="e.g. Rings, Bangles" class="w-full px-3 py-2 border rounded-lg text-sm">
             </div>
             <div>
@@ -120,12 +128,19 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Due Date *</label>
-                <input type="date" name="due_date" value="{{ old('due_date', optional($workOrder->due_date)->format('Y-m-d')) }}" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Seal Type (e.g. 916 Seal)</label>
+                <input type="text" name="seal" value="{{ old('seal', $workOrder->seal) }}" placeholder="e.g. 916 Seal" class="w-full px-3 py-2 border rounded-lg text-sm">
             </div>
             <div>
                 <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Job Type</label>
                 <input type="text" name="job_type" value="{{ old('job_type', $workOrder->job_type) }}" placeholder="e.g. Handmade / Casting" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Due Date *</label>
+                <input type="date" name="due_date" value="{{ old('due_date', optional($workOrder->due_date)->format('Y-m-d')) }}" required class="w-full px-3 py-2 border rounded-lg text-sm">
             </div>
         </div>
 

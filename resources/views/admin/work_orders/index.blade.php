@@ -284,7 +284,7 @@
                                     <div class="line-through text-slate-400">{{ \Carbon\Carbon::parse($order->due_date)->format('d M Y') }}</div>
                                 @else
                                     <div class="{{ \Carbon\Carbon::parse($order->due_date)->isPast() && $order->status !== 'completed' ? 'text-rose-600 font-bold' : 'text-slate-700' }}">
-                                        {{ \Carbon\Carbon::parse($order->due_date)->format('d M Y') }}
+                                        {{ \Carbon\Carbon::parse($order->created_at)->format('d M Y') }}
                                     </div>
                                 @endif
                             </td>

@@ -23,7 +23,7 @@ class WorkOrderController extends Controller
             $perPage = 15;
         }
 
-        $query = WorkOrder::with('craftsman')->latest();
+        $query = WorkOrder::with('craftsman')->orderBy('id', 'desc');
 
         // 1. Search Query
         if ($request->filled('search')) {
@@ -34,6 +34,7 @@ class WorkOrderController extends Controller
                   ->orWhere('product_name', 'like', "%{$search}%")
                   ->orWhere('design_code', 'like', "%{$search}%")
                   ->orWhere('design_nickname', 'like', "%{$search}%")
+                  ->orWhere('seal', 'like', "%{$search}%")
                   ->orWhereExists(function ($sub) use ($search) {
                       $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                           ->from('design_codes')
@@ -63,9 +64,7 @@ class WorkOrderController extends Controller
         if ($request->filled('nickname')) {
             $nickFilter = trim($request->nickname);
             $query->where(function ($q) use ($nickFilter) {
-                // Match work orders that have this nickname directly
                 $q->where('design_nickname', 'like', "%{$nickFilter}%")
-                  // OR match via the design_codes master table
                   ->orWhereExists(function ($sub) use ($nickFilter) {
                       $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                           ->from('design_codes')
@@ -106,7 +105,6 @@ class WorkOrderController extends Controller
             'overdue'      => WorkOrder::where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today())->count(),
         ];
 
-        // Options for Filter Dropdowns
         $categories    = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->sort()->values();
         $subcategories = WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->pluck('subcategory')->sort()->values();
         $nicknames     = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
@@ -147,12 +145,13 @@ class WorkOrderController extends Controller
             'unit_type'       => ['required', 'string'],
             'quantity'        => ['required', 'integer', 'min:1'],
             'screw_type'      => ['nullable', 'string'],
-            'category'        => ['required', 'string', 'max:100'],
+            'category'        => ['nullable', 'string', 'max:100'],
             'subcategory'     => ['nullable', 'string', 'max:100'],
             'size'            => ['nullable', 'string', 'max:50'],
             'length'          => ['nullable', 'string', 'max:50'],
             'rhodium_polish'  => ['nullable', 'boolean'],
             'hallmark_purity' => ['required', 'string'],
+            'seal'            => ['nullable', 'string', 'max:50'],
             'target_weight'   => ['required', 'numeric', 'min:0.001'],
             'due_date'        => ['required', 'date'],
             'job_type'        => ['nullable', 'string'],
@@ -161,7 +160,51 @@ class WorkOrderController extends Controller
         ]);
 
         if ($request->hasFile('design_image')) {
-            $validated['design_image'] = $request->file('design_image')->store('work_orders', 'public');
+            $file = $request->file('design_image');
+            $filename = 'work_orders/' . uniqid() . '.' . $file->getClientOriginalExtension();
+            
+            $referenceNo = $validated['reference_no'] ?? '';
+            $sealValue   = $validated['seal'] ?? '';
+
+            if (stripos($referenceNo, 'ESO') !== false || !empty($sealValue)) {
+                $filePath = $file->getRealPath();
+                $info = @getimagesize($filePath);
+                $mime = $info['mime'] ?? 'image/jpeg';
+
+                $img = match($mime) {
+                    'image/png'  => @imagecreatefrompng($filePath),
+                    'image/webp' => @imagecreatefromwebp($filePath),
+                    default      => @imagecreatefromjpeg($filePath)
+                };
+
+                if ($img) {
+                    $x = 30;
+                    $y = 30;
+                    $text = ' 916 SEAL ';
+                    
+                    $bgColor = imagecolorallocate($img, 245, 158, 11); 
+                    $textColor = imagecolorallocate($img, 255, 255, 255); 
+
+                    imagefilledrectangle($img, $x - 5, $y - 5, $x + (strlen($text) * 9), $y + 20, $bgColor);
+                    imagestring($img, 5, $x, $y, $text, $textColor);
+
+                    ob_start();
+                    match($mime) {
+                        'image/png'  => imagepng($img),
+                        'image/webp' => imagewebp($img),
+                        default      => imagejpeg($img, null, 90)
+                    };
+                    $imageData = ob_get_clean();
+                    imagedestroy($img);
+
+                    Storage::disk('public')->put($filename, $imageData);
+                    $validated['design_image'] = $filename;
+                } else {
+                    $validated['design_image'] = $file->store('work_orders', 'public');
+                }
+            } else {
+                $validated['design_image'] = $file->store('work_orders', 'public');
+            }
         }
 
         $year = date('Y');
@@ -170,20 +213,17 @@ class WorkOrderController extends Controller
         $validated['work_order_no'] = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
         $validated['status'] = 'pending';
 
-        // Keep master table sync using nickname
         if (!empty($validated['design_code'])) {
             $designCodeStr = trim($validated['design_code']);
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
-            
-            // Auto-fill nickname from master table if not provided
-            if (empty($validated['design_nickname']) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
+
+            if (empty($validated['design_nickname'] ?? null) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
                 $validated['design_nickname'] = $existingDesign->nickname;
             }
 
-            // Only create design code entry; don't set nickname = code
             DesignCode::firstOrCreate(
                 ['code' => $designCodeStr],
-                ['nickname' => $validated['design_nickname'] ?: null]
+                ['nickname' => $validated['design_nickname'] ?? null]
             );
         }
 
@@ -219,12 +259,13 @@ class WorkOrderController extends Controller
             'unit_type'       => ['required', 'string'],
             'quantity'        => ['required', 'integer', 'min:1'],
             'screw_type'      => ['nullable', 'string'],
-            'category'        => ['required', 'string', 'max:100'],
+            'category'        => ['nullable', 'string', 'max:100'],
             'subcategory'     => ['nullable', 'string', 'max:100'],
             'size'            => ['nullable', 'string', 'max:50'],
             'length'          => ['nullable', 'string', 'max:50'],
             'rhodium_polish'  => ['nullable', 'boolean'],
             'hallmark_purity' => ['required', 'string'],
+            'seal'            => ['nullable', 'string', 'max:50'],
             'target_weight'   => ['required', 'numeric', 'min:0.001'],
             'due_date'        => ['required', 'date'],
             'job_type'        => ['nullable', 'string', 'max:100'],
@@ -236,7 +277,52 @@ class WorkOrderController extends Controller
             if ($workOrder->design_image) {
                 Storage::disk('public')->delete($workOrder->design_image);
             }
-            $validated['design_image'] = $request->file('design_image')->store('designs', 'public');
+
+            $file = $request->file('design_image');
+            $filename = 'work_orders/' . uniqid() . '.' . $file->getClientOriginalExtension();
+            
+            $referenceNo = $validated['reference_no'] ?? '';
+            $sealValue   = $validated['seal'] ?? '';
+
+            if (stripos($referenceNo, 'ESO') !== false || !empty($sealValue)) {
+                $filePath = $file->getRealPath();
+                $info = @getimagesize($filePath);
+                $mime = $info['mime'] ?? 'image/jpeg';
+
+                $img = match($mime) {
+                    'image/png'  => @imagecreatefrompng($filePath),
+                    'image/webp' => @imagecreatefromwebp($filePath),
+                    default      => @imagecreatefromjpeg($filePath)
+                };
+
+                if ($img) {
+                    $x = 30;
+                    $y = 30;
+                    $text = ' 916 SEAL ';
+                    
+                    $bgColor = imagecolorallocate($img, 245, 158, 11); 
+                    $textColor = imagecolorallocate($img, 255, 255, 255); 
+
+                    imagefilledrectangle($img, $x - 5, $y - 5, $x + (strlen($text) * 9), $y + 20, $bgColor);
+                    imagestring($img, 5, $x, $y, $text, $textColor);
+
+                    ob_start();
+                    match($mime) {
+                        'image/png'  => imagepng($img),
+                        'image/webp' => imagewebp($img),
+                        default      => imagejpeg($img, null, 90)
+                    };
+                    $imageData = ob_get_clean();
+                    imagedestroy($img);
+
+                    Storage::disk('public')->put($filename, $imageData);
+                    $validated['design_image'] = $filename;
+                } else {
+                    $validated['design_image'] = $file->store('work_orders', 'public');
+                }
+            } else {
+                $validated['design_image'] = $file->store('work_orders', 'public');
+            }
         }
 
         $validated['rhodium_polish'] = $request->boolean('rhodium_polish');
@@ -244,16 +330,14 @@ class WorkOrderController extends Controller
         if (!empty($validated['design_code'])) {
             $designCodeStr = trim($validated['design_code']);
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
-            
-            // Auto-fill nickname from master table if not provided
-            if (empty($validated['design_nickname']) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
+
+            if (empty($validated['design_nickname'] ?? null) && $existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
                 $validated['design_nickname'] = $existingDesign->nickname;
             }
 
-            // Only create design code entry; don't set nickname = code
             DesignCode::firstOrCreate(
                 ['code' => $designCodeStr],
-                ['nickname' => $validated['design_nickname'] ?: null]
+                ['nickname' => $validated['design_nickname'] ?? null]
             );
         }
 
@@ -284,7 +368,7 @@ class WorkOrderController extends Controller
             'order_ids'    => ['required', 'array'],
             'order_ids.*'  => ['exists:work_orders,id'],
             'craftsman_id' => ['required', 'exists:craftsmen,id'],
-            'due_date'     => ['nullable', 'date'], // Optional custom bulk due date
+            'due_date'     => ['nullable', 'date'],
         ]);
 
         $updateData = [
@@ -293,7 +377,6 @@ class WorkOrderController extends Controller
             'allocated_at' => Carbon::now(),
         ];
 
-        // If a due date is specified during bulk allocation, update it as well
         if ($request->filled('due_date')) {
             $updateData['due_date'] = $request->due_date;
         }
@@ -383,11 +466,11 @@ class WorkOrderController extends Controller
         if (($handle = fopen($path, 'r')) !== false) {
             $firstLine = fgets($handle);
             rewind($handle);
-            
+
             $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
             $header = fgetcsv($handle, 1000, $delimiter);
-            
-            $normalizedHeader = $header ? array_map(function($h) {
+
+            $normalizedHeader = $header ? array_map(function ($h) {
                 return strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', $h)));
             }, $header) : [];
 
@@ -404,7 +487,7 @@ class WorkOrderController extends Controller
         $year = date('Y');
 
         foreach ($rows as $cleanRow) {
-            $getVal = function(array $keys) use ($cleanRow) {
+            $getVal = function (array $keys) use ($cleanRow) {
                 foreach ($keys as $key) {
                     $lowerKey = strtolower(trim($key));
                     if (array_key_exists($lowerKey, $cleanRow)) {
@@ -416,8 +499,7 @@ class WorkOrderController extends Controller
             };
 
             $referenceNo  = $getVal(['order no', 'orderno', 'ref no', 'reference no']);
-            
-            // Skip import if reference number already exists in database
+
             if (!empty($referenceNo) && WorkOrder::where('reference_no', $referenceNo)->exists()) {
                 $skippedCount++;
                 continue;
@@ -427,15 +509,14 @@ class WorkOrderController extends Controller
             $orderDateStr = $getVal(['order date', 'orderdate', 'date']);
             $productName  = $getVal(['product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
             $designCode   = $getVal(['design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
-            
-            // Capture custom nickname from Excel if present
-            $excelNickname = $getVal(['nickname', 'design nickname', 'design_nickname', 'alias']);
 
-            $weight       = $getVal(['weight', 'target weight', 'wt']);
-            $size         = $getVal(['size']);
-            $quantity     = $getVal(['quantity', 'qty', 'pcs']);
-            $jobType      = $getVal(['balance', 'job type', 'jobtype']);
-            $instructions = $getVal(['remarks', 'instruction', 'instructions', 'note']);
+            $excelNickname = $getVal(['nickname', 'design nickname', 'design_nickname', 'alias']);
+            $seal          = $getVal(['seal', '916 seal', 'hallmark seal', 'seal type']) ?? (stripos($referenceNo ?? '', 'ESO') !== false ? '916' : null);
+            $weight        = $getVal(['weight', 'target weight', 'wt']);
+            $size          = $getVal(['size']);
+            $quantity      = $getVal(['quantity', 'qty', 'pcs']);
+            $jobType       = $getVal(['balance', 'job type', 'jobtype']);
+            $instructions  = $getVal(['remarks', 'instruction', 'instructions', 'note']);
 
             $parsedDate = now();
             if (!empty($orderDateStr)) {
@@ -455,25 +536,22 @@ class WorkOrderController extends Controller
             $workOrderNo = 'WO-' . $year . '_' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
             $designCodeStr = !empty($designCode) ? $designCode : 'DEFAULT';
-            
+
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
-            
+
             if (!empty($excelNickname)) {
                 $nickname = $excelNickname;
             } elseif ($existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
                 $nickname = $existingDesign->nickname;
             } else {
-                // Don't use the design code as a nickname — leave it null
                 $nickname = null;
             }
 
-            // Register the design code in master table; only set nickname if it's a real name
             DesignCode::firstOrCreate(
                 ['code' => $designCodeStr],
                 ['nickname' => $nickname]
             );
 
-            // If an explicit nickname was provided in Excel, update the master too
             if (!empty($excelNickname) && $existingDesign) {
                 $existingDesign->update(['nickname' => $excelNickname]);
             }
@@ -489,6 +567,7 @@ class WorkOrderController extends Controller
                 'category'        => null,
                 'size'            => $size,
                 'hallmark_purity' => null,
+                'seal'            => $seal,
                 'target_weight'   => is_numeric($weight) ? (float) $weight : 0.000,
                 'job_type'        => $jobType,
                 'instructions'    => $instructions,

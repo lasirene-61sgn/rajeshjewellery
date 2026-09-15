@@ -32,6 +32,7 @@ class WorkOrder extends Model
         'size',
         'length',
         'rhodium_polish',
+        'seal',
         'hallmark_purity',
         'target_weight',
         'due_date',

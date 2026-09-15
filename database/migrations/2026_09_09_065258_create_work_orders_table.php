@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('design_nickname')->nullable()->index(); // e.g. Nickname
 
             // Specifications from form
-            $table->string('category')->index(); // Rings, Necklaces
+            $table->string('category')->index()->nullable(); // Rings, Necklaces
             $table->string('subcategory')->nullable()->index(); // Bridal, Daily
             $table->string('unit_type')->default('Piece'); // Piece, Pair, Grams
             $table->unsignedInteger('quantity')->default(1);
@@ -30,9 +30,9 @@ return new class extends Migration
             $table->string('size')->nullable(); // e.g. 14
             $table->string('length')->nullable(); // e.g. 18 inch
             $table->boolean('rhodium_polish')->default(true); // Yes/No
-            $table->string('hallmark_purity')->default('916 (22K)');
+            $table->string('hallmark_purity')->default('916 (22K)')->nullable();
             $table->decimal('target_weight', 8, 3); // 6.500g
-            $table->date('due_date')->index();
+            $table->date('due_date')->index()->nullable();
             $table->string('job_type')->nullable(); // Handmade / Casting
             $table->text('instructions')->nullable();
             $table->string('design_image')->nullable();
