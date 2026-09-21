@@ -529,7 +529,7 @@ class WorkOrderController extends Controller
     public function import(Request $request): RedirectResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:20240'],
+            'file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls,ods,xlsm,xlsb', 'max:20240'],
             'due_date_days' => ['required', 'integer', 'between:4,7'],
         ]);
 
