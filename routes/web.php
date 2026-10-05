@@ -30,7 +30,7 @@ Route::middleware(['web', 'guest:admin'])->group(function () {
 });
 
 // Protected Admin Routes
-Route::middleware(['web', 'auth:admin', 'single.admin.session'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::post('/logout', [AdminLoginController::class, 'logout'])->name('logout');
 

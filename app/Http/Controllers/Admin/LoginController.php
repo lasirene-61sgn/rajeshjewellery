@@ -45,30 +45,14 @@ class LoginController extends Controller
         }
 
         Auth::guard('admin')->login($admin, $request->boolean('remember'));
-            $request->session()->regenerate();
+        $request->session()->regenerate();
 
-            $newSessionId = Session::getId();
-
-        DB::transaction(function () use ($admin, $newSessionId){
-            $currentAdmin = Admin::lockForUpdate()->find($admin->id);
-
-            if(config('session.driver') === 'database' && $currentAdmin->session_id){
-                DB::table(config('session.table', 'sessions'))->where('id', $currentAdmin->session_id)->delete();
-            }
-            $currentAdmin->update(['session_id' => $newSessionId]);
-        });
         $request->clearRateLimit();
         return redirect()->intended(route('admin.dashboard'));
     }
 
     public function logout(Request $request): RedirectResponse
     {
-        $admin = Auth::guard('admin')->user();
-
-        if($admin){
-            $admin->update(['session_id' => null]);
-        }
-
         Auth::guard('admin')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

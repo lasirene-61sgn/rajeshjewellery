@@ -135,6 +135,10 @@
                 <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Job Type</label>
                 <input type="text" name="job_type" value="{{ old('job_type', $workOrder->job_type) }}" placeholder="e.g. Handmade / Casting" class="w-full px-3 py-2 border rounded-lg text-sm">
             </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Order Type</label>
+                <input type="text" name="order_type" value="{{ old('order_type', $workOrder->order_type) }}" placeholder="e.g. SO / CO" class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

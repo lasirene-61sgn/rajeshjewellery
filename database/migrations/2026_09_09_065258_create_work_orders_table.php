@@ -36,6 +36,7 @@ return new class extends Migration
             $table->string('job_type')->nullable(); // Handmade / Casting
             $table->text('instructions')->nullable();
             $table->string('design_image')->nullable();
+            $table->string('order_type')->nullable();
 
             // Allocation & Lifecycle State
             $table->foreignId('craftsman_id')->nullable()->constrained('craftsmen')->nullOnDelete();

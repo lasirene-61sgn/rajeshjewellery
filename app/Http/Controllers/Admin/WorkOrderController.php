@@ -61,6 +61,10 @@ class WorkOrderController extends Controller
             $query->where('design_code', $request->design_code);
         }
 
+        if ($request->filled('order_type')) {
+            $query->where('order_type', $request->order_type);
+        }
+
         if ($request->filled('nickname')) {
             $nickFilter = trim($request->nickname);
             $query->where(function ($q) use ($nickFilter) {
@@ -83,6 +87,9 @@ class WorkOrderController extends Controller
             $query->whereDate('due_date', '<=', $request->to_date);
         }
 
+        // Clone the query with all search/dropdown filters applied BEFORE applying the status tab filter
+        $baseQuery = clone $query;
+
         // 4. Tab Status Filtering
         match ($currentTab) {
             'pending'      => $query->where('status', 'pending'),
@@ -96,18 +103,19 @@ class WorkOrderController extends Controller
 
         // Tab Badges Counts
         $counts = [
-            'all'          => WorkOrder::count(),
-            'pending'      => WorkOrder::where('status', 'pending')->count(),
-            'allocated'    => WorkOrder::where('status', 'allocated')->count(),
-            'in_process'   => WorkOrder::whereIn('status', ['in_process', 'returned'])->count(),
-            'for_approval' => WorkOrder::where('status', 'for_approval')->count(),
-            'completed'    => WorkOrder::where('status', 'completed')->count(),
-            'overdue'      => WorkOrder::where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today())->count(),
+            'all'          => (clone $baseQuery)->count(),
+            'pending'      => (clone $baseQuery)->where('status', 'pending')->count(),
+            'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
+            'in_process'   => (clone $baseQuery)->whereIn('status', ['in_process', 'returned'])->count(),
+            'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
+            'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
+            'overdue'      => (clone $baseQuery)->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today())->count(),
         ];
 
         $categories    = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->sort()->values();
         $subcategories = WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->pluck('subcategory')->sort()->values();
         $nicknames     = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
+        $orderTypes    = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type')->sort()->values();
         $craftsmen     = Craftsman::orderBy('name')->get();
         $designCodes   = DesignCode::orderBy('code')->get();
 
@@ -124,6 +132,7 @@ class WorkOrderController extends Controller
             'categories',
             'subcategories',
             'nicknames',
+            'orderTypes',
             'craftsmen',
             'designCodes'
         ));
@@ -157,6 +166,7 @@ class WorkOrderController extends Controller
             'job_type'        => ['nullable', 'string'],
             'instructions'    => ['nullable', 'string'],
             'design_image'    => ['nullable', 'image', 'max:4096'],
+            'order_type'      => ['nullable', 'string'],
         ]);
 
         if ($request->hasFile('design_image')) {
@@ -296,6 +306,7 @@ class WorkOrderController extends Controller
             'job_type'        => ['nullable', 'string', 'max:100'],
             'instructions'    => ['nullable', 'string'],
             'design_image'    => ['nullable', 'image', 'max:4096'],
+            'order_type'      => ['nullable', 'string'],
         ]);
 
         if ($request->hasFile('design_image')) {
@@ -535,25 +546,71 @@ class WorkOrderController extends Controller
 
         $file = $request->file('file');
         $path = $file->getRealPath();
+        $extension = $file->getClientOriginalExtension();
 
         $rows = [];
-        if (($handle = fopen($path, 'r')) !== false) {
-            $firstLine = fgets($handle);
-            rewind($handle);
 
-            $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
-            $header = fgetcsv($handle, 1000, $delimiter);
+        if (in_array(strtolower($extension), ['csv', 'txt'])) {
+            if (($handle = fopen($path, 'r')) !== false) {
+                $firstLine = fgets($handle);
+                rewind($handle);
 
-            $normalizedHeader = $header ? array_map(function ($h) {
-                return strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', $h)));
-            }, $header) : [];
+                $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
+                $header = fgetcsv($handle, 1000, $delimiter);
 
-            while (($row = fgetcsv($handle, 1000, $delimiter)) !== false) {
-                if (!empty($normalizedHeader) && count($normalizedHeader) === count($row)) {
-                    $rows[] = array_combine($normalizedHeader, $row);
+                $normalizedHeader = $header ? array_map(function ($h) {
+                    return strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', (string)$h)));
+                }, $header) : [];
+
+                while (($row = fgetcsv($handle, 1000, $delimiter)) !== false) {
+                    if (!empty($normalizedHeader) && count($normalizedHeader) === count($row)) {
+                        $rows[] = array_combine($normalizedHeader, $row);
+                    }
+                }
+                fclose($handle);
+            }
+        } else {
+            // Excel files
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $worksheet = $spreadsheet->getActiveSheet();
+            
+            // Format data so dates appear as text instead of floats
+            $data = $worksheet->toArray(null, true, true, false);
+            
+            if (count($data) > 0) {
+                $header = array_shift($data);
+                
+                $validIndices = [];
+                $normalizedHeader = [];
+                foreach ($header as $index => $h) {
+                    if ($h !== null && trim((string)$h) !== '') {
+                        $validIndices[] = $index;
+                        $normalizedHeader[] = strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', (string)$h)));
+                    }
+                }
+
+                foreach ($data as $row) {
+                    $isEmptyRow = true;
+                    foreach ($row as $cell) {
+                        if ($cell !== null && trim((string)$cell) !== '') {
+                            $isEmptyRow = false;
+                            break;
+                        }
+                    }
+                    if ($isEmptyRow) {
+                        continue; 
+                    }
+
+                    $filteredRow = [];
+                    foreach ($validIndices as $index) {
+                        $filteredRow[] = $row[$index] ?? null;
+                    }
+                    
+                    if (count($normalizedHeader) === count($filteredRow)) {
+                        $rows[] = array_combine($normalizedHeader, $filteredRow);
+                    }
                 }
             }
-            fclose($handle);
         }
 
         $importedCount = 0;
@@ -579,18 +636,19 @@ class WorkOrderController extends Controller
                 continue;
             }
 
-            $unitType     = $getVal(['order type', 'ordertype', 'unit', 'unit type']) ?? 'pcs';
+            $unitType     = $getVal(['unit', 'unit type', 'unit_type']) ?? 'pcs';
             $orderDateStr = $getVal(['order date', 'orderdate', 'date']);
-            $productName  = $getVal(['product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
-            $designCode   = $getVal(['design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
+            $productName  = $getVal(['Product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
+            $designCode   = $getVal(['Design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
 
             $excelNickname = $getVal(['nickname', 'design nickname', 'design_nickname', 'alias']);
             $seal          = $getVal(['seal', '916 seal', 'hallmark seal', 'seal type']) ?? (stripos($referenceNo ?? '', 'ESO') !== false ? '916' : null);
-            $weight        = $getVal(['weight', 'target weight', 'wt']);
-            $size          = $getVal(['size']);
-            $quantity      = $getVal(['quantity', 'qty', 'pcs']);
+            $weight        = $getVal(['Weight', 'target weight', 'wt']);
+            $size          = $getVal(['Size']);
+            $quantity      = $getVal(['Quantity', 'qty', 'pcs']);
             $jobType       = $getVal(['balance', 'job type', 'jobtype']);
             $instructions  = $getVal(['remarks', 'instruction', 'instructions', 'note']);
+            $orderType     = $getVal(['Order Type', 'order_type', 'ordertype']);
 
             $parsedDate = now();
             if (!empty($orderDateStr)) {
@@ -664,6 +722,7 @@ class WorkOrderController extends Controller
                 'due_date'        => $dueDate, // Populated automatically 7 days past order date
                 'allocated_at'    => $craftsmanId ? Carbon::now() : null,
                 'created_at'      => $parsedDate,
+                'order_type'      => $orderType,
             ]);
             $importedCount++;
         }

@@ -49,6 +49,7 @@ class WorkOrder extends Model
         'return_image',
         'return_due_date',
         'return_count',
+        'order_type',
     ];
 
     #[Override]

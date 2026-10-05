@@ -150,6 +150,27 @@
                 </div>
             </div>
 
+            <!-- Order Type Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('order_type') }}' }">
+                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Order Type</label>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selected || 'All Order Types'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="order_type" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="orderSearch" placeholder="Search order type..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Order Types</button>
+                        <template x-for="ot in filteredOrderType" :key="ot">
+                            <button type="button" @click="selected = ot; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === ot ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="ot"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
             <!-- Nickname Searchable Dropdown -->
             <div class="relative" x-data="{ open: false, selected: '{{ request('nickname') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Nickname</label>
@@ -500,6 +521,7 @@
             craftsmanSearch: '',
             designCodeSearch: '',
             nicknameSearch: '',
+            orderSearch: '',
 
             get filteredCategories() {
                 const categories = @js($categories ?? []);
@@ -515,6 +537,11 @@
                 const craftsmen = @js($craftsmen ?? []);
                 if (!this.craftsmanSearch) return craftsmen;
                 return craftsmen.filter(c => c.name.toLowerCase().includes(this.craftsmanSearch.toLowerCase()));
+            },
+            get filteredOrderType() {
+                const orderTypes = @js($orderTypes ?? []);
+                if(!this.orderSearch) return orderTypes;
+                return orderTypes.filter(ot => ot.toLowerCase().includes(this.orderSearch.toLowerCase()));
             },
             get filteredDesignCodes() {
                 const designCodes = @js($designCodes ?? []);
