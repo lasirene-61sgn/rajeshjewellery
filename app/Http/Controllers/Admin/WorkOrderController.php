@@ -249,11 +249,18 @@ class WorkOrderController extends Controller
             $designCodeStr = trim($validated['design_code']);
             $designCodeModel = DesignCode::with('craftsmen')->where('code', $designCodeStr)->first();
 
-            if ($designCodeModel && $designCodeModel->craftsmen->isNotEmpty()) {
-                // Automatically assign to the first linked craftsman
-                $validated['craftsman_id'] = $designCodeModel->craftsmen->first()->id;
-                $validated['status'] = 'allocated';
-                $validated['allocated_at'] = Carbon::now();
+            if ($designCodeModel) {
+                // If the design code has an image, copy it if the work order doesn't have one
+                if (empty($validated['design_image']) && $designCodeModel->image) {
+                    $validated['design_image'] = $designCodeModel->image;
+                }
+
+                if ($designCodeModel->craftsmen->isNotEmpty()) {
+                    // Automatically assign to the first linked craftsman
+                    $validated['craftsman_id'] = $designCodeModel->craftsmen->first()->id;
+                    $validated['status'] = 'in_process';
+                    $validated['allocated_at'] = Carbon::now();
+                }
             }
 
             DesignCode::firstOrCreate(
@@ -695,11 +702,18 @@ class WorkOrderController extends Controller
             // Check if design code is mapped to a craftsman for auto-allocation
             $craftsmanId = null;
             $status = 'pending';
+            $imagePath = null;
             $designCodeModel = DesignCode::with('craftsmen')->where('code', $designCodeStr)->first();
 
-            if ($designCodeModel && $designCodeModel->craftsmen->isNotEmpty()) {
-                $craftsmanId = $designCodeModel->craftsmen->first()->id;
-                $status = 'in_process'; // Automatically shifts to in_process as requested
+            if ($designCodeModel) {
+                if ($designCodeModel->image) {
+                    $imagePath = $designCodeModel->image;
+                }
+
+                if ($designCodeModel->craftsmen->isNotEmpty()) {
+                    $craftsmanId = $designCodeModel->craftsmen->first()->id;
+                    $status = 'in_process'; // Automatically shifts to in_process as requested
+                }
             }
 
             WorkOrder::create([
@@ -723,6 +737,7 @@ class WorkOrderController extends Controller
                 'allocated_at'    => $craftsmanId ? Carbon::now() : null,
                 'created_at'      => $parsedDate,
                 'order_type'      => $orderType,
+                'design_image'    => $imagePath,
             ]);
             $importedCount++;
         }

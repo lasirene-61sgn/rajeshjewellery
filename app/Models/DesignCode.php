@@ -12,6 +12,7 @@ class DesignCode extends Model
     protected $fillable = [
         'code',
         'nickname',
+        'image',
     ];
 
     public function craftsmen(): BelongsToMany{

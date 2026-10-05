@@ -17,7 +17,7 @@
 
     <!-- Form Card -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <form action="{{ route('admin.craftsmen.store') }}" method="POST" class="p-6 space-y-6">
+        <form action="{{ route('admin.craftsmen.store') }}" method="POST" enctype="multipart/form-data" class="p-6 space-y-6">
             @csrf
 
             <!-- Personal Info -->
@@ -72,6 +72,7 @@
                                 <th class="p-3 w-10 text-center">Select</th>
                                 <th class="p-3 w-36">Design Code</th>
                                 <th class="p-3">Design Name</th>
+                                <th class="p-3 w-48">Design Image</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -103,6 +104,26 @@
                                             class="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500"
                                         >
                                     </td>
+                                    <td class="p-3">
+                                        <div class="flex items-center gap-2">
+                                            @if($design->image)
+                                                <div class="flex flex-col gap-1 items-center">
+                                                    <img src="{{ Storage::url($design->image) }}" class="w-10 h-10 rounded object-cover border border-slate-200">
+                                                    <label class="text-[9px] text-rose-500 flex items-center gap-1 cursor-pointer">
+                                                        <input type="checkbox" name="delete_design_images[]" value="{{ $design->id }}" id="delete_image_{{ $design->id }}" disabled> Remove
+                                                    </label>
+                                                </div>
+                                            @endif
+                                            <input 
+                                                type="file" 
+                                                name="existing_design_images[{{ $design->id }}]" 
+                                                id="image_input_{{ $design->id }}"
+                                                accept="image/*"
+                                                disabled
+                                                class="w-full text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50"
+                                            >
+                                        </div>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
@@ -116,9 +137,10 @@
                 <!-- Inline New Code -->
                 <div class="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl">
                     <span class="text-xs font-bold text-indigo-700 uppercase tracking-wide">+ Register New Design Code</span>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
                         <input type="text" name="new_design_code" value="{{ old('new_design_code') }}" placeholder="Design Code (e.g. DS003)" class="px-3 py-2 border rounded-lg text-xs bg-white border-slate-300">
                         <input type="text" name="new_design_nickname" value="{{ old('new_design_nickname') }}" placeholder="Design Name (e.g. Peacock Choker)" class="px-3 py-2 border rounded-lg text-xs bg-white border-slate-300">
+                        <input type="file" name="design_image" accept="image/*" class="px-3 py-2 border rounded-lg text-xs bg-white border-slate-300 text-slate-500">
                     </div>
                 </div>
             </div>
@@ -138,7 +160,13 @@
     function toggleNameInput(id) {
         const checkbox = document.getElementById('design_' + id);
         const input = document.getElementById('name_input_' + id);
+        const imageInput = document.getElementById('image_input_' + id);
+        const deleteInput = document.getElementById('delete_image_' + id);
+
         input.disabled = !checkbox.checked;
+        if(imageInput) imageInput.disabled = !checkbox.checked;
+        if(deleteInput) deleteInput.disabled = !checkbox.checked;
+
         if (checkbox.checked) {
             input.focus();
         }

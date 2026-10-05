@@ -40,6 +40,35 @@ class CraftsmanController extends Controller
         }
     }
 
+    protected function retroactivelyUpdateWorkOrders(Craftsman $craftsman, array $assignedIds): void
+    {
+        if (empty($assignedIds)) return;
+
+        $designCodes = DesignCode::whereIn('id', $assignedIds)->get();
+
+        foreach ($designCodes as $design) {
+            $codeStr = $design->code;
+
+            // 1. Copy image to all work orders with this code that lack an image
+            if ($design->image) {
+                WorkOrder::where('design_code', $codeStr)
+                    ->where(function($q) {
+                        $q->whereNull('design_image')->orWhere('design_image', '');
+                    })
+                    ->update(['design_image' => $design->image]);
+            }
+
+            // 2. Auto-assign all pending work orders with this code to this craftsman
+            WorkOrder::where('design_code', $codeStr)
+                ->where('status', 'pending')
+                ->update([
+                    'craftsman_id' => $craftsman->id,
+                    'status'       => 'in_process',
+                    'allocated_at' => Carbon::now(),
+                ]);
+        }
+    }
+
     public function index(Request $request): View
     {
         $query = Craftsman::with('designCodes')->latest();
@@ -101,8 +130,11 @@ class CraftsmanController extends Controller
             'design_codes'        => ['nullable', 'array'],
             'design_codes.*'      => ['exists:design_codes,id'],
             'design_names'        => ['nullable', 'array'],
-            'new_design_code'     => ['nullable', 'string', 'max:50'],
             'new_design_nickname' => ['nullable', 'string', 'max:100'],
+            'design_image'        => ['nullable', 'image', 'mimes:jpg,jpeg,svg,png,gif,webp', 'max:5048'],
+            'existing_design_images'   => ['nullable', 'array'],
+            'existing_design_images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,svg,png,gif,webp', 'max:5048'],
+            'delete_design_images'     => ['nullable', 'array'],
         ]);
 
         $validated['plain_password'] = $validated['password'];
@@ -123,6 +155,25 @@ class CraftsmanController extends Controller
             }
         }
 
+        // Handle deleting existing images
+        if ($request->filled('delete_design_images')) {
+            foreach ($request->delete_design_images as $id) {
+                if (in_array($id, $assignedIds)) {
+                    DesignCode::where('id', $id)->update(['image' => null]);
+                }
+            }
+        }
+
+        // Handle uploading new images for existing codes
+        if ($request->hasFile('existing_design_images')) {
+            foreach ($request->file('existing_design_images') as $id => $file) {
+                if (in_array($id, $assignedIds) && $file) {
+                    $path = $file->store('design_codes', 'public');
+                    DesignCode::where('id', $id)->update(['image' => $path]);
+                }
+            }
+        }
+
         // Create new design code if typed inline
         if ($request->filled('new_design_code')) {
             $codeStr = trim($request->new_design_code);
@@ -139,10 +190,18 @@ class CraftsmanController extends Controller
             if ($nickStr && $newDesign->wasRecentlyCreated === false) {
                 $newDesign->update(['nickname' => $nickStr]);
             }
+            
+            if ($request->hasFile('design_image')) {
+                 $path = $request->file('design_image')->store('design_codes', 'public');
+                 $newDesign->update(['image' => $path]);
+            }
+
             $assignedIds[] = $newDesign->id;
         }
 
         $craftsman->designCodes()->sync(array_unique($assignedIds));
+        
+        $this->retroactivelyUpdateWorkOrders($craftsman, $assignedIds);
 
         return redirect()->route('admin.craftsmen.index')->with('success', 'Craftsman created successfully.');
     }
@@ -169,6 +228,10 @@ class CraftsmanController extends Controller
             'design_names'        => ['nullable', 'array'],
             'new_design_code'     => ['nullable', 'string', 'max:50'],
             'new_design_nickname' => ['nullable', 'string', 'max:100'],
+            'design_image'        => ['nullable', 'image', 'mimes:jpg,jpeg,svg,png,gif,webp', 'max:5048'],
+            'existing_design_images'   => ['nullable', 'array'],
+            'existing_design_images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,svg,png,gif,webp', 'max:5048'],
+            'delete_design_images'     => ['nullable', 'array'],
         ]);
 
         if (!empty($validated['password'])) {
@@ -194,6 +257,25 @@ class CraftsmanController extends Controller
             }
         }
 
+        // Handle deleting existing images
+        if ($request->filled('delete_design_images')) {
+            foreach ($request->delete_design_images as $id) {
+                if (in_array($id, $assignedIds)) {
+                    DesignCode::where('id', $id)->update(['image' => null]);
+                }
+            }
+        }
+
+        // Handle uploading new images for existing codes
+        if ($request->hasFile('existing_design_images')) {
+            foreach ($request->file('existing_design_images') as $id => $file) {
+                if (in_array($id, $assignedIds) && $file) {
+                    $path = $file->store('design_codes', 'public');
+                    DesignCode::where('id', $id)->update(['image' => $path]);
+                }
+            }
+        }
+
         // Add inline new design code if entered
         if ($request->filled('new_design_code')) {
             $codeStr = trim($request->new_design_code);
@@ -210,10 +292,18 @@ class CraftsmanController extends Controller
             if ($nickStr && $newDesign->wasRecentlyCreated === false) {
                 $newDesign->update(['nickname' => $nickStr]);
             }
+
+            if ($request->hasFile('design_image')) {
+                 $path = $request->file('design_image')->store('design_codes', 'public');
+                 $newDesign->update(['image' => $path]);
+            }
+
             $assignedIds[] = $newDesign->id;
         }
 
         $craftsman->designCodes()->sync(array_unique($assignedIds));
+
+        $this->retroactivelyUpdateWorkOrders($craftsman, $assignedIds);
 
         return redirect()->route('admin.craftsmen.index')->with('success', 'Craftsman updated successfully.');
     }
