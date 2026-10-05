@@ -114,7 +114,7 @@ class CraftsmanController extends Controller
     public function create(): View
     {
         $this->syncWorkOrderDesignCodes();
-        $designCodes = DesignCode::orderBy('code')->get();
+        $designCodes = DesignCode::doesntHave('craftsmen')->orderBy('code')->get();
 
         return view('admin.craftsmen.create', compact('designCodes'));
     }
@@ -210,7 +210,9 @@ class CraftsmanController extends Controller
     {
         $this->syncWorkOrderDesignCodes();
         $craftsman->load('designCodes');
-        $designCodes = DesignCode::orderBy('code')->get();
+        $designCodes = DesignCode::whereHas('craftsmen', function($q) use ($craftsman) {
+            $q->where('craftsman_id', $craftsman->id);
+        })->orDoesntHave('craftsmen')->orderBy('code')->get();
 
         return view('admin.craftsmen.edit', compact('craftsman', 'designCodes'));
     }

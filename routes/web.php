@@ -43,6 +43,7 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
 
     // Custom static endpoints before dynamic or resource routes
     Route::get('design-codes/unassigned', [AdminDesignCodeController::class, 'unassigned'])->name('design_codes.unassigned');
+    Route::resource('design-codes', AdminDesignCodeController::class)->except(['create', 'store', 'show'])->names('design_codes');
     
     // Import Routes MUST be placed before work-orders/{workOrder} parameters
     Route::get('work-orders/import', [AdminWorkOrderController::class, 'importForm'])->name('work_orders.import.form');
