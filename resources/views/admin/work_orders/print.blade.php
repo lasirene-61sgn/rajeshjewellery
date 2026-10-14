@@ -6,99 +6,102 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @media print {
-            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; background: white !important; }
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+            body { 
+                print-color-adjust: exact; 
+                -webkit-print-color-adjust: exact; 
+                background: white !important; 
+                margin: 0 !important;
+                padding: 0 !important;
+            }
             .page-break { page-break-after: always; }
+        }
+
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            padding: 12mm;
+            box-sizing: border-box;
+            margin: auto;
+            background: white;
         }
     </style>
 </head>
-<body class="bg-stone-100 text-stone-900 font-sans p-4 sm:p-8">
-    <div class="max-w-3xl mx-auto space-y-8">
-        @php
-            $orders = isset($workOrders) ? $workOrders : [$workOrder];
-        @endphp
+<body class="bg-stone-100 text-stone-900 font-serif">
+    
+    @php
+        $orders = isset($workOrders) ? $workOrders : [$workOrder];
+    @endphp
 
-        @foreach($orders as $index => $order)
-            <div class="bg-white border-2 border-stone-800 rounded-2xl p-6 shadow-sm relative {{ count($orders) > 1 && !$loop->last ? 'page-break mb-8' : '' }}">
+    @foreach($orders as $index => $order)
+        <div class="a4-page {{ count($orders) > 1 && !$loop->last ? 'page-break' : '' }}">
+            <!-- Outer Page Border Container -->
+            <div class="w-full h-full border-2 border-black p-4 flex flex-col justify-between">
                 
-                <div class="flex justify-between items-center mb-4 border-b-2 border-stone-800 pb-2">
-                    <div>
-                        <h2 class="text-xl font-bold uppercase tracking-wide m-0">Jewelry Workshop Job Card</h2>
-                        <span class="text-xs font-semibold text-stone-500">Created: {{ $order->created_at->format('d/m/Y') }}</span>
-                    </div>
-                    <div class="text-right">
-                        <h2 class="text-xl font-mono font-bold m-0">{{ $order->work_order_no }}</h2>
-                        <span class="text-xs font-semibold text-rose-700">Due: {{ $order->due_date?->format('d/m/Y') ?? 'N/A' }}</span>
-                    </div>
-                </div>
-
-                <!-- Image Box -->
-                <div class="border-2 border-stone-800 rounded-xl overflow-hidden bg-stone-50 mb-6 flex items-center justify-center" style="height: 600px;">
+                <!-- Main Jewelry Design Image Container (Border Removed) -->
+                <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden bg-stone-50">
                     @if($order->design_image)
                         <img src="{{ asset('storage/' . $order->design_image) }}" class="w-full h-full object-contain">
                     @else
-                        <div class="text-stone-400 font-bold text-sm">No Design Image Available</div>
+                        <div class="text-stone-400 font-sans font-bold text-base">No Design Image Available</div>
                     @endif
                 </div>
 
                 <!-- Specifications Data Table -->
-                <div class="grid grid-cols-2 gap-y-3 gap-x-6 text-sm font-semibold text-stone-900 border-t-2 border-stone-800 pt-5">
-                    
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Product Name</span>
-                        <span class="font-bold">: {{ $order->product_name }}</span>
-                    </div>
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Design Code</span>
-                        <span class="font-bold text-amber-600">: {{ $order->design_code }}</span>
-                    </div>
+                <div class="w-full pt-4 text-base leading-relaxed text-black font-serif border-t-2 border-black">
+                    <div class="grid grid-cols-2 gap-x-12 gap-y-2 pt-2">
+                        
+                        <!-- Left Column -->
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <span class="font-bold w-32">SNo</span>
+                                <span class="font-normal">: {{ $order->id }}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-bold w-32">Design</span>
+                                <span class="font-bold text-amber-600">: {{ $order->design_code }}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-bold w-32">Order No</span>
+                                <span class="font-normal">: {{ $order->reference_no }}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-bold w-32">Order Date</span>
+                                <span class="font-normal">: {{ $order->created_at->format('d/m/Y') }}</span>
+                            </div>
+                        </div>
 
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Category</span>
-                        <span class="font-bold">: {{ $order->category }} ({{ $order->subcategory ?? 'General' }})</span>
-                    </div>
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Purity / Hallmark</span>
-                        <span class="font-bold">: {{ $order->hallmark_purity }}</span>
-                    </div>
+                        <!-- Right Column -->
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <span class="font-bold w-28">Weight</span>
+                                <span class="font-extrabold text-amber-700">: {{ number_format($order->target_weight, 3) }} g</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-bold w-28">Size</span>
+                                <span class="font-normal">: {{ $order->size ?? 'N/A' }}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-bold w-28">Qty</span>
+                                <span class="font-normal">: {{ $order->quantity }}</span>
+                            </div>
+                        </div>
 
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Target Weight</span>
-                        <span class="font-extrabold text-amber-700">: {{ number_format($order->target_weight, 3) }} g</span>
                     </div>
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Quantity / Units</span>
-                        <span class="font-bold">: {{ $order->quantity }} {{ $order->unit_type }}</span>
-                    </div>
-
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Assigned Craftsman</span>
-                        <span class="font-bold text-indigo-700">: {{ $order->craftsman->name ?? 'Unassigned' }}</span>
-                    </div>
-                    <div class="flex justify-between border-b border-stone-200 pb-2">
-                        <span class="text-stone-600">Rhodium Polish</span>
-                        <span class="font-bold">: {{ $order->rhodium_polish ? 'YES' : 'NO' }}</span>
-                    </div>
-
-                </div>
-
-                @if($order->instructions)
-                    <div class="mt-4 p-4 bg-stone-50 border-2 border-stone-200 rounded-xl">
-                        <div class="text-xs text-stone-500 uppercase font-bold mb-1">Specific Workshop Instructions</div>
-                        <div class="text-sm font-medium">{{ $order->instructions }}</div>
-                    </div>
-                @endif
-
-                <div class="mt-12 flex justify-between text-xs font-bold text-stone-600">
-                    <div>Craftsman Signature: __________________</div>
-                    <div>QC Approval: __________________</div>
                 </div>
 
             </div>
-        @endforeach
+        </div>
+    @endforeach
+
+    <!-- On-screen Print Button -->
+    <div class="text-center my-6 print:hidden">
+        <button onclick="window.print()" class="px-8 py-3 bg-indigo-600 text-white font-sans font-bold text-sm rounded-xl shadow-md hover:bg-indigo-700">
+            Print Slip(s)
+        </button>
     </div>
 
-    <div class="text-center mt-6 print:hidden">
-        <button onclick="window.print()" class="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700">Print Slip(s)</button>
-    </div>
 </body>
-</html>
