@@ -54,6 +54,10 @@ class WorkOrder extends Model
         'created_at',
     ];
 
+    protected $appends = [
+        'has_seal',
+    ];
+
     #[Override]
     protected function casts(): array
     {
@@ -157,5 +161,10 @@ class WorkOrder extends Model
         }
 
         return null;
+    }
+
+    public function getHasSealAttribute(): bool
+    {
+        return !empty($this->seal) || (stripos((string) $this->reference_no, 'ESO') !== false);
     }
 }

@@ -333,13 +333,20 @@
                             </td>
 
                             <td class="px-4 py-3">
-                                @if($order->design_image)
-                                    <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}')" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
-                                @else
-                                    <div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-medium border border-slate-200">
-                                        N/A
-                                    </div>
-                                @endif
+                                <div class="relative w-12 h-12">
+                                    @if($order->design_image)
+                                        <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}', {{ $order->has_seal ? 'true' : 'false' }})" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
+                                    @else
+                                        <div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-medium border border-slate-200">
+                                            N/A
+                                        </div>
+                                    @endif
+                                    @if($order->has_seal)
+                                        <span class="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow leading-none uppercase tracking-wider border border-white">
+                                            916
+                                        </span>
+                                    @endif
+                                </div>
                             </td>
 
                             <td class="px-4 py-3">
@@ -347,6 +354,12 @@
                                 @if($order->reference_no)
                                     <div class="text-xs text-slate-400">Ref: {{ $order->reference_no }}</div>
                                 @endif
+                                <!-- @if($order->has_seal)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 mt-1">
+                                        <svg class="w-2.5 h-2.5 mr-1 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                        916 SEAL
+                                    </span>
+                                @endif -->
                             </td>
 
                             <td class="px-4 py-3">
@@ -535,7 +548,14 @@
             <button @click="imageModalOpen = false" class="absolute -top-10 right-0 text-white hover:text-slate-200 focus:outline-none">
                 <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
-            <img :src="selectedImageUrl" class="w-full h-auto max-h-[85vh] object-contain rounded-xl shadow-2xl">
+            <div class="relative">
+                <img :src="selectedImageUrl" class="w-full h-auto max-h-[85vh] object-contain rounded-xl shadow-2xl">
+                <template x-if="selectedImageHasSeal">
+                    <span class="absolute top-4 left-4 bg-amber-500 text-white font-black text-xs sm:text-sm px-3 py-1.5 rounded-lg shadow-xl uppercase tracking-wider border-2 border-white">
+                        916 SEAL
+                    </span>
+                </template>
+            </div>
         </div>
     </div>
 
@@ -549,6 +569,7 @@
             returnModalOpen: false,
             imageModalOpen: false,
             selectedImageUrl: '',
+            selectedImageHasSeal: false,
             selectedOrderId: null,
             selectedOrderNo: '',
             selectedCraftsmanId: '',
@@ -656,8 +677,9 @@
                 this.selectedOrderNo = no;
                 this.returnModalOpen = true;
             },
-            openImageModal(url) {
+            openImageModal(url, hasSeal = false) {
                 this.selectedImageUrl = url;
+                this.selectedImageHasSeal = hasSeal;
                 this.imageModalOpen = true;
             }
         }

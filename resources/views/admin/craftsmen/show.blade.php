@@ -125,7 +125,10 @@
                     @forelse($craftsman->workOrders as $order)
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-4 py-3 font-bold font-mono text-slate-900">
-                                {{ $order->work_order_no }}
+                                <div>{{ $order->work_order_no }}</div>
+                                <!-- @if($order->has_seal)
+                                    <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">916 SEAL</span>
+                                @endif -->
                             </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-slate-800">{{ $order->product_name }}</div>

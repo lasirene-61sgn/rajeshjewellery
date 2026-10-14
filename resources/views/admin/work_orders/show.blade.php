@@ -18,14 +18,28 @@
         @if($workOrder->design_image)
             <div>
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-2">Design Image</span>
-                <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design Image" class="w-32 h-32 object-cover rounded-xl border border-slate-200 shadow-sm">
+                <div class="relative inline-block">
+                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design Image" class="w-36 h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
+                    @if($workOrder->has_seal)
+                        <span class="absolute bottom-2 right-2 bg-amber-500 text-white text-[11px] font-black px-2 py-0.5 rounded shadow uppercase">
+                            916 SEAL
+                        </span>
+                    @endif
+                </div>
             </div>
         @endif
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Reference Number</span>
-                <p class="text-sm font-medium text-slate-800">{{ $workOrder->reference_no ?? 'N/A' }}</p>
+                <p class="text-sm font-medium text-slate-800 flex items-center gap-2">
+                    <span>{{ $workOrder->reference_no ?? 'N/A' }}</span>
+                    <!-- @if($workOrder->has_seal)
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            916 SEAL
+                        </span>
+                    @endif -->
+                </p>
             </div>
 
             <div>

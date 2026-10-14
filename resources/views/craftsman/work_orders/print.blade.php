@@ -42,11 +42,17 @@
             <div class="w-full h-full border-2 border-black p-4 flex flex-col justify-between">
                 
                 <!-- Main Jewelry Design Image Container -->
-                <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden">
+                <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden relative">
                     @if($order->design_image)
                         <img src="{{ asset('storage/' . $order->design_image) }}" class="w-full h-full object-contain">
                     @else
                         <div class="text-stone-400 font-sans font-bold text-base">No Design Image Available</div>
+                    @endif
+
+                    @if($order->has_seal)
+                        <div class="absolute top-4 left-4 bg-amber-500 text-white font-sans font-black text-sm px-3 py-1 rounded shadow uppercase tracking-wider border border-amber-600">
+                            916 SEAL
+                        </div>
                     @endif
                 </div>
 
@@ -67,6 +73,9 @@
                             <div class="flex items-center">
                                 <span class="font-bold w-28">Order No</span>
                                 <span class="font-normal">: {{ $order->reference_no }}</span>
+                                <!-- @if($order->has_seal)
+                                    <span class="ml-2 font-sans font-black text-xs bg-amber-100 text-amber-900 border border-amber-400 px-1.5 py-0.5 rounded">916 SEAL</span>
+                                @endif -->
                             </div>
                             <div class="flex items-center">
                                 <span class="font-bold w-28">Order Date</span>

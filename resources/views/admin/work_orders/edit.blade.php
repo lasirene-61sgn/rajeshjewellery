@@ -19,15 +19,22 @@
         @method('PUT')
 
         <div>
-            <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Design Image</label>
+            <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-semibold uppercase text-slate-700">Design Image</label>
+                @if($workOrder->has_seal)
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black bg-amber-500 text-white shadow-sm uppercase tracking-wide">
+                        916 SEAL
+                    </span>
+                @endif
+            </div>
             
             @if($workOrder->design_image)
             <div class="relative inline-block mb-2">
                 <a href="{{ asset('storage/' . $workOrder->design_image) }}" target="_blank">
-                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design" class="w-16 h-16 object-cover rounded-lg border shadow-sm">
+                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design" class="w-20 h-20 object-cover rounded-lg border shadow-sm">
                 </a>
-                @if(stripos($workOrder->reference_no, 'ESO') !== false || $workOrder->seal)
-                <span class="absolute bottom-1 right-1 bg-amber-500 text-white text-[9px] font-bold px-1 rounded shadow">
+                @if($workOrder->has_seal)
+                <span class="absolute bottom-1 right-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow leading-none uppercase">
                     916 SEAL
                 </span>
                 @endif
@@ -39,7 +46,12 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Reference Number</label>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-semibold uppercase text-slate-700">Reference Number</label>
+                    @if($workOrder->has_seal)
+                        <span class="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded">916 SEAL</span>
+                    @endif
+                </div>
                 <input type="text" name="reference_no" value="{{ old('reference_no', $workOrder->reference_no) }}" placeholder="e.g. REF-2026-001" class="w-full px-3 py-2 border rounded-lg text-sm">
             </div>
             <div>

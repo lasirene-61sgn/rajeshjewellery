@@ -260,6 +260,11 @@
                                     <div class="text-slate-300 text-xs font-bold">N/A</div>
                                 @endif
                                 <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                                @if($order->has_seal)
+                                    <span class="absolute top-2 left-2 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow uppercase tracking-wider">
+                                        916 SEAL
+                                    </span>
+                                @endif
                             </div>
 
                             <div class="p-3 space-y-2">
@@ -317,14 +322,27 @@
                             <tr class="hover:bg-slate-50 transition-colors {{ $order->status === 'returned' ? 'bg-rose-50/40' : '' }}">
                                 <td class="px-4 py-3"><input type="checkbox" name="order_ids[]" value="{{ $order->id }}" x-model="selectedOrders" class="order-checkbox rounded border-slate-300 text-amber-600 focus:ring-amber-600"></td>
                                 <td class="px-4 py-3">
-                                    @if($order->design_image)
-                                        <img src="{{ asset('storage/' . $order->design_image) }}" class="w-12 h-12 object-cover rounded-xl border border-slate-200 shadow-sm">
-                                    @else
-                                        <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">N/A</div>
-                                    @endif
+                                    <div class="relative w-12 h-12">
+                                        @if($order->design_image)
+                                            <img src="{{ asset('storage/' . $order->design_image) }}" class="w-12 h-12 object-cover rounded-xl border border-slate-200 shadow-sm">
+                                        @else
+                                            <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">N/A</div>
+                                        @endif
+                                        @if($order->has_seal)
+                                            <span class="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow leading-none uppercase">
+                                                916
+                                            </span>
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="font-bold text-slate-900 block">{{ $order->work_order_no }}</span>
+                                    @if($order->reference_no)
+                                        <span class="text-xs text-slate-400 block">{{ $order->reference_no }}</span>
+                                    @endif
+                                    <!-- @if($order->has_seal)
+                                        <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">916 SEAL</span>
+                                    @endif -->
                                     @if($order->status === 'returned')
                                         <span class="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">QC Defect</span>
                                     @endif
@@ -385,6 +403,11 @@
                 </template>
                 <template x-if="!ordersList[currentIndex] || !ordersList[currentIndex].design_image">
                     <span class="text-slate-400 text-sm font-bold">No Image Available</span>
+                </template>
+                <template x-if="ordersList[currentIndex]?.has_seal">
+                    <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-lg shadow uppercase">
+                        916 SEAL
+                    </span>
                 </template>
                 <span class="absolute bottom-2 left-3 bg-slate-900/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm" x-text="(currentIndex + 1) + ' of ' + ordersList.length"></span>
             </div>

@@ -7,8 +7,15 @@
 
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-stone-800">{{ $workOrder->work_order_no }}</h1>
-            <p class="text-sm text-stone-500">{{ $workOrder->product_name }}</p>
+            <div class="flex items-center gap-2">
+                <h1 class="text-2xl font-bold text-stone-800">{{ $workOrder->work_order_no }}</h1>
+                @if($workOrder->has_seal)
+                    <span class="bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
+                        916 SEAL
+                    </span>
+                @endif
+            </div>
+            <p class="text-sm text-stone-500">{{ $workOrder->product_name }} @if($workOrder->reference_no) &bull; Ref: {{ $workOrder->reference_no }} @endif</p>
         </div>
         <div class="flex items-center gap-3">
             @if(in_array($workOrder->status, ['in_process', 'returned']))
@@ -44,11 +51,18 @@
     <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 sm:p-8">
         <div class="flex flex-col sm:flex-row gap-6">
             <div class="sm:w-1/3">
-                @if($workOrder->design_image)
-                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" class="w-full h-56 object-cover rounded-xl border border-stone-200 shadow-sm">
-                @else
-                    <div class="w-full h-56 rounded-xl bg-stone-50 border border-dashed flex items-center justify-center text-stone-400 text-xs">No Design Image</div>
-                @endif
+                <div class="relative">
+                    @if($workOrder->design_image)
+                        <img src="{{ asset('storage/' . $workOrder->design_image) }}" class="w-full h-56 object-cover rounded-xl border border-stone-200 shadow-sm">
+                    @else
+                        <div class="w-full h-56 rounded-xl bg-stone-50 border border-dashed flex items-center justify-center text-stone-400 text-xs">No Design Image</div>
+                    @endif
+                    @if($workOrder->has_seal)
+                        <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow uppercase tracking-wider">
+                            916 SEAL
+                        </span>
+                    @endif
+                </div>
             </div>
 
             <div class="sm:w-2/3 grid grid-cols-2 gap-4 text-sm">
@@ -58,7 +72,14 @@
                 </div>
                 <div>
                     <span class="text-xs text-stone-400 uppercase font-semibold">Gold Hallmark / Purity</span>
-                    <p class="font-bold text-stone-800">{{ $workOrder->hallmark_purity }}</p>
+                    <p class="font-bold text-stone-800 flex items-center gap-2">
+                        <span>{{ $workOrder->hallmark_purity ?? 'N/A' }}</span>
+                        <!-- @if($workOrder->has_seal)
+                            <span class="bg-amber-100 text-amber-800 border border-amber-300 text-xs font-extrabold px-1.5 py-0.5 rounded">
+                                916 SEAL
+                            </span>
+                        @endif -->
+                    </p>
                 </div>
                 <div>
                     <span class="text-xs text-stone-400 uppercase font-semibold">Target Metal Weight</span>
