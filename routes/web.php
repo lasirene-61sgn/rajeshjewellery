@@ -8,10 +8,11 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\LoginController as AdminLoginController;
 use App\Http\Controllers\Admin\WorkOrderController as AdminWorkOrderController;
 use App\Http\Controllers\Admin\DesignCodeController as AdminDesignCodeController;
-
+use App\Http\Controllers\Admin\OrderController;
 // Craftsman Controllers
 use App\Http\Controllers\Craftsman\DashboardController as CraftsmanDashboardController;
 use App\Http\Controllers\Craftsman\LoginController as CraftsmanLoginController;
+use App\Http\Controllers\Craftsman\OrderController as CraftsmanOrderController;
 use App\Http\Controllers\Craftsman\WorkOrderController as CraftsmanWorkOrderController;
 
 Route::get('/', function () {
@@ -61,6 +62,10 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     Route::post('work-orders/{workOrder}/approve', [AdminWorkOrderController::class, 'approve'])->name('work_orders.approve');
 
     Route::resource('work-orders', AdminWorkOrderController::class)->names('work_orders');
+
+    Route::resource('orders', OrderController::class);
+    Route::post('orders/{order}/allocate', [OrderController::class, 'allocate'])->name('orders.allocate');
+    Route::patch('orders/{order}/force-complete', [OrderController::class, 'forceComplete'])->name('orders.force-complete');
 });
 
 /*
@@ -87,6 +92,7 @@ Route::prefix('craftsman')->name('craftsman.')->middleware(['web', 'auth:craftsm
     Route::post('work-orders/bulk-accept', [CraftsmanWorkOrderController::class, 'bulkAccept'])->name('work-orders.bulk-accept');
     Route::post('work-orders/bulk-submit', [CraftsmanWorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
 
-
-
+    Route::get('orders', [CraftsmanOrderController::class, 'index'])->name('orders.index');
+    Route::get('orders/{order}', [CraftsmanOrderController::class, 'show'])->name('orders.show');
+    Route::patch('orders/{order}/status', [CraftsmanOrderController::class, 'updateStatus'])->name('orders.update-status');
 });

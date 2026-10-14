@@ -57,6 +57,14 @@
                 </svg>
                 My Work Orders
             </a>
+
+            <a href="{{ route('craftsman.orders.index') }}" 
+               class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 {{ request()->routeIs('craftsman.orders.*') ? 'bg-amber-500/10 text-amber-400 border-r-2 border-amber-500' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100' }}">
+                <svg class="w-5 h-5 mr-3 {{ request()->routeIs('craftsman.orders.*') ? 'text-amber-400' : 'text-slate-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                </svg>
+                My Orders
+            </a>
         </nav>
 
         <!-- Logout Section (Always pushed to the bottom by flex-1 nav above) -->
@@ -119,7 +127,7 @@
                 </div>
             @endif
 
-            @if($errors->any())
+            @if(isset($errors) && $errors->any())
                 <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm shadow-sm">
                     <ul class="list-disc list-inside space-y-1">
                         @foreach($errors->all() as $error)

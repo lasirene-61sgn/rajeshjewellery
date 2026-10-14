@@ -36,4 +36,9 @@ class Craftsman extends Authenticatable
     {
         return $this->hasMany(WorkOrder::class, 'craftsman_id');
     }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'craftsman_id');
+    }
 }

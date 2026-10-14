@@ -67,7 +67,7 @@
             </div>
 
             <!-- Category Searchable Dropdown -->
-            <div class="relative" x-data="{ open: false, selected: '{{ request('category') }}' }">
+            <!-- <div class="relative" x-data="{ open: false, selected: '{{ request('category') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Category</label>
                 <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
                     <span x-text="selected || 'All Categories'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
@@ -85,10 +85,10 @@
                         </template>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
             <!-- Subcategory Searchable Dropdown -->
-            <div class="relative" x-data="{ open: false, selected: '{{ request('subcategory') }}' }">
+            <!-- <div class="relative" x-data="{ open: false, selected: '{{ request('subcategory') }}' }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Subcategory</label>
                 <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
                     <span x-text="selected || 'All Subcategories'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
@@ -106,7 +106,7 @@
                         </template>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
             <!-- Craftsman Searchable Dropdown -->
             <div class="relative" x-data="{ open: false, selected: '{{ request('craftsman_id') }}', get selectedName() { if(!this.selected) return ''; const c = @js($craftsmen ?? []).find(c => c.id == this.selected); return c ? c.name : ''; } }">
