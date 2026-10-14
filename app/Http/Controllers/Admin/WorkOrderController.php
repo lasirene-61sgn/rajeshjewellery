@@ -54,7 +54,17 @@ class WorkOrderController extends Controller
         }
 
         if ($request->filled('craftsman_id')) {
-            $query->where('craftsman_id', $request->craftsman_id);
+            $craftsmanId = $request->craftsman_id;
+            $query->where(function ($q) use ($craftsmanId) {
+                $q->where('craftsman_id', $craftsmanId)
+                  ->orWhereExists(function ($sub) use ($craftsmanId) {
+                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                          ->from('design_codes')
+                          ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                          ->whereColumn('design_codes.code', 'work_orders.design_code')
+                          ->where('craftsman_design_code.craftsman_id', $craftsmanId);
+                  });
+            });
         }
 
         if ($request->filled('design_code')) {
@@ -117,7 +127,7 @@ class WorkOrderController extends Controller
         $nicknames     = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
         $orderTypes    = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type')->sort()->values();
         $craftsmen     = Craftsman::orderBy('name')->get();
-        $designCodes   = DesignCode::orderBy('code')->get();
+        $designCodes   = DesignCode::with('craftsmen')->orderBy('code')->get();
 
         $workOrders = $query->paginate($perPage)->withQueryString();
 
@@ -253,13 +263,6 @@ class WorkOrderController extends Controller
                 // If the design code has an image, copy it if the work order doesn't have one
                 if (empty($validated['design_image']) && $designCodeModel->image) {
                     $validated['design_image'] = $designCodeModel->image;
-                }
-
-                if ($designCodeModel->craftsmen->isNotEmpty()) {
-                    // Automatically assign to the first linked craftsman
-                    $validated['craftsman_id'] = $designCodeModel->craftsmen->first()->id;
-                    $validated['status'] = 'in_process';
-                    $validated['allocated_at'] = Carbon::now();
                 }
             }
 
@@ -416,9 +419,15 @@ class WorkOrderController extends Controller
             'craftsman_id' => ['required', 'exists:craftsmen,id'],
         ]);
 
+        $status = 'allocated';
+        $designCodeModel = DesignCode::with('craftsmen')->where('code', $workOrder->design_code)->first();
+        if ($designCodeModel && $designCodeModel->craftsmen->contains('id', $request->craftsman_id)) {
+            $status = 'in_process';
+        }
+
         $workOrder->update([
             'craftsman_id' => $request->craftsman_id,
-            'status'       => 'allocated',
+            'status'       => $status,
             'allocated_at' => Carbon::now(),
         ]);
 
@@ -434,17 +443,27 @@ class WorkOrderController extends Controller
             'due_date'     => ['nullable', 'date'],
         ]);
 
-        $updateData = [
-            'craftsman_id' => $request->craftsman_id,
-            'status'       => 'allocated',
-            'allocated_at' => Carbon::now(),
-        ];
+        $orders = WorkOrder::whereIn('id', $request->order_ids)->get();
 
-        if ($request->filled('due_date')) {
-            $updateData['due_date'] = $request->due_date;
+        foreach ($orders as $workOrder) {
+            $status = 'allocated';
+            $designCodeModel = DesignCode::with('craftsmen')->where('code', $workOrder->design_code)->first();
+            if ($designCodeModel && $designCodeModel->craftsmen->contains('id', $request->craftsman_id)) {
+                $status = 'in_process';
+            }
+
+            $updateData = [
+                'craftsman_id' => $request->craftsman_id,
+                'status'       => $status,
+                'allocated_at' => Carbon::now(),
+            ];
+
+            if ($request->filled('due_date')) {
+                $updateData['due_date'] = $request->due_date;
+            }
+
+            $workOrder->update($updateData);
         }
-
-        WorkOrder::whereIn('id', $request->order_ids)->update($updateData);
 
         return back()->with('success', count($request->order_ids) . ' work orders successfully allocated.');
     }
@@ -708,11 +727,6 @@ class WorkOrderController extends Controller
             if ($designCodeModel) {
                 if ($designCodeModel->image) {
                     $imagePath = $designCodeModel->image;
-                }
-
-                if ($designCodeModel->craftsmen->isNotEmpty()) {
-                    $craftsmanId = $designCodeModel->craftsmen->first()->id;
-                    $status = 'in_process'; // Automatically shifts to in_process as requested
                 }
             }
 

@@ -58,14 +58,6 @@ class CraftsmanController extends Controller
                     ->update(['design_image' => $design->image]);
             }
 
-            // 2. Auto-assign all pending work orders with this code to this craftsman
-            WorkOrder::where('design_code', $codeStr)
-                ->where('status', 'pending')
-                ->update([
-                    'craftsman_id' => $craftsman->id,
-                    'status'       => 'in_process',
-                    'allocated_at' => Carbon::now(),
-                ]);
         }
     }
 

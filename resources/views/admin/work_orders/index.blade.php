@@ -231,7 +231,7 @@
                         <input type="hidden" name="order_ids[]" :value="id">
                     </template>
                     
-                    <select name="craftsman_id" required class="px-3 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+                    <select name="craftsman_id" required x-model="bulkCraftsmanId" class="px-3 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-indigo-500">
                         <option value="">-- Choose Craftsman --</option>
                         @foreach($craftsmen as $craftsman)
                             <option value="{{ $craftsman->id }}">{{ $craftsman->name }} ({{ $craftsman->mobile }})</option>
@@ -288,7 +288,7 @@
                         <th class="px-4 py-3.5">Weight / Qty</th>
                         <th class="px-4 py-3.5">Craftsman</th>
                         <th class="px-4 py-3.5">Status</th>
-                        <th class="px-4 py-3.5">Due Date</th>
+                        <th class="px-4 py-3.5">Order Date</th>
                         <th class="px-4 py-3.5 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -343,7 +343,7 @@
                                         </form>
                                     @endif
                                 @else
-                                    <button @click="openAllocateModal({{ $order->id }}, '{{ $order->work_order_no }}')" class="text-xs font-semibold text-indigo-600 hover:underline">
+                                    <button @click="openAllocateModal({{ $order->id }}, '{{ $order->work_order_no }}', '{{ $order->design_code }}')" class="text-xs font-semibold text-indigo-600 hover:underline">
                                         + Assign Craftsman
                                     </button>
                                 @endif
@@ -449,7 +449,7 @@
                 @csrf
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Select Craftsman *</label>
-                    <select name="craftsman_id" required class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                    <select name="craftsman_id" required x-model="selectedCraftsmanId" class="w-full px-3 py-2 border rounded-lg text-sm bg-white">
                         <option value="">-- Choose Craftsman --</option>
                         @foreach($craftsmen as $craftsman)
                             <option value="{{ $craftsman->id }}">{{ $craftsman->name }} ({{ $craftsman->mobile }})</option>
@@ -514,6 +514,48 @@
             selectedImageUrl: '',
             selectedOrderId: null,
             selectedOrderNo: '',
+            selectedCraftsmanId: '',
+            bulkCraftsmanId: '',
+            designCodesMap: @js($designCodes->keyBy('code')),
+            workOrdersMap: @js($workOrders->keyBy('id')),
+
+            init() {
+                this.$watch('selectedOrders', (value) => {
+                    this.bulkCraftsmanId = '';
+                    if (value.length === 0) return;
+                    
+                    let commonCraftsmanId = null;
+                    
+                    for (let i = 0; i < value.length; i++) {
+                        const id = value[i];
+                        const order = this.workOrdersMap[id];
+                        if (!order) {
+                            this.bulkCraftsmanId = '';
+                            return;
+                        }
+                        
+                        const code = order.design_code;
+                        let cId = null;
+                        if (code && this.designCodesMap[code] && this.designCodesMap[code].craftsmen && this.designCodesMap[code].craftsmen.length > 0) {
+                            cId = this.designCodesMap[code].craftsmen[0].id;
+                        }
+                        
+                        if (cId === null) {
+                            this.bulkCraftsmanId = '';
+                            return; 
+                        }
+                        
+                        if (i === 0) {
+                            commonCraftsmanId = cId;
+                        } else if (commonCraftsmanId !== cId) {
+                            this.bulkCraftsmanId = '';
+                            return; 
+                        }
+                    }
+                    
+                    this.bulkCraftsmanId = commonCraftsmanId || '';
+                });
+            },
 
             // Searchable Dropdown States
             categorySearch: '',
@@ -561,9 +603,15 @@
                     this.selectedOrders = [];
                 }
             },
-            openAllocateModal(id, no) {
+            openAllocateModal(id, no, code) {
                 this.selectedOrderId = id;
                 this.selectedOrderNo = no;
+                this.selectedCraftsmanId = '';
+                
+                if (code && this.designCodesMap[code] && this.designCodesMap[code].craftsmen && this.designCodesMap[code].craftsmen.length > 0) {
+                    this.selectedCraftsmanId = this.designCodesMap[code].craftsmen[0].id;
+                }
+                
                 this.allocateModalOpen = true;
             },
             openReturnModal(id, no) {

@@ -45,6 +45,7 @@ class WorkOrder extends Model
         'accepted_at',
         'submitted_at',
         'completed_at',
+        'approved_at',
         'return_reason',
         'return_image',
         'return_due_date',
@@ -66,6 +67,7 @@ class WorkOrder extends Model
             'accepted_at' => 'datetime',
             'submitted_at' => 'datetime',
             'completed_at' => 'datetime',
+            'approved_at' => 'datetime',
         ];
     }
 
