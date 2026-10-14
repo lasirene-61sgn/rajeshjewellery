@@ -27,8 +27,8 @@
             </div>
 
             <div>
-                <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Due Date Calculation (Days from Order) *</label>
-                <select name="due_date_days" required class="w-full text-xs text-slate-600 border border-slate-300 rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Fallback Due Date Calculation (Days from Order if Expected Date is missing)</label>
+                <select name="due_date_days" class="w-full text-xs text-slate-600 border border-slate-300 rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
                     <option value="4">4 Days</option>
                     <option value="5">5 Days</option>
                     <option value="6">6 Days</option>
@@ -42,8 +42,9 @@
             <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 space-y-1">
                 <span class="font-bold text-slate-700 block mb-1">Expected Column Mapping:</span>
                 <p>• <strong>Order No</strong> → Reference Number</p>
-                <p>• <strong>Order Type</strong> → Unit Type (pcs, etc.)</p>
+                <p>• <strong>Order Type</strong> → Order Type</p>
                 <p>• <strong>Order Date</strong> → Created Date</p>
+                <p>• <strong>Expected Date</strong> → Due Date</p>
                 <p>• <strong>Product</strong> → Product Name</p>
                 <p>• <strong>Design Code</strong> → Design Code</p>
                 <p>• <strong>Weight</strong> → Target Weight</p>

@@ -150,22 +150,55 @@
                 </div>
             </div>
 
-            <!-- Order Type Searchable Dropdown -->
-            <div class="relative" x-data="{ open: false, selected: '{{ request('order_type') }}' }">
+            <!-- Order Type Multi-Select Searchable Dropdown -->
+            <div class="relative" x-data="{
+                open: false,
+                selected: @js($selectedOrderTypes ?? []),
+                toggle(val) {
+                    if (this.selected.includes(val)) {
+                        this.selected = this.selected.filter(item => item !== val);
+                    } else {
+                        this.selected.push(val);
+                    }
+                },
+                clearAll() {
+                    this.selected = [];
+                },
+                get displayText() {
+                    if (this.selected.length === 0) return 'All Order Types';
+                    if (this.selected.length === 1) return this.selected[0];
+                    return this.selected.length + ' Types Selected';
+                }
+            }">
                 <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Order Type</label>
                 <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
-                    <span x-text="selected || 'All Order Types'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
-                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    <span x-text="displayText" class="truncate" :class="selected.length > 0 ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <div class="flex items-center gap-1 shrink-0 ml-1">
+                        <span x-show="selected.length > 0" class="px-1.5 py-0.5 text-3xs font-bold bg-indigo-100 text-indigo-700 rounded-full" x-text="selected.length"></span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
                 </button>
-                <input type="hidden" name="order_type" :value="selected">
-                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
-                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                <template x-for="ot in selected" :key="ot">
+                    <input type="hidden" name="order_type[]" :value="ot">
+                </template>
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full min-w-[200px] mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100 flex items-center justify-between gap-1 z-10">
                         <input type="text" x-model="orderSearch" placeholder="Search order type..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                        <button type="button" x-show="selected.length > 0" @click="clearAll()" class="text-2xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2 py-1 rounded font-semibold whitespace-nowrap">Clear</button>
                     </div>
                     <div class="py-1">
-                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Order Types</button>
+                        <div class="px-3 py-1.5 flex items-center justify-between text-2xs text-slate-400 uppercase font-semibold border-b border-slate-100">
+                            <span>Select Multiple</span>
+                            <button type="button" x-show="selected.length > 0" @click="clearAll()" class="text-indigo-600 hover:underline">Reset</button>
+                        </div>
+                        <template x-if="filteredOrderType.length === 0">
+                            <div class="px-3 py-2 text-xs text-slate-400">No order types found</div>
+                        </template>
                         <template x-for="ot in filteredOrderType" :key="ot">
-                            <button type="button" @click="selected = ot; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === ot ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="ot"></button>
+                            <label class="w-full px-3 py-2 flex items-center gap-2 text-xs hover:bg-indigo-50 cursor-pointer select-none transition-colors" :class="selected.includes(ot) ? 'bg-indigo-50/70 text-indigo-900 font-semibold' : 'text-slate-700'">
+                                <input type="checkbox" :value="ot" :checked="selected.includes(ot)" @change="toggle(ot)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                <span x-text="ot" class="truncate flex-1"></span>
+                            </label>
                         </template>
                     </div>
                 </div>
@@ -192,14 +225,14 @@
                 </div>
             </div>
 
-            <!-- Date Filters -->
+            <!-- Date Filters (Filter by Created Date) -->
             <div>
-                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Due Date From</label>
+                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Created Date From</label>
                 <input type="date" name="from_date" value="{{ request('from_date') }}" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300">
             </div>
 
             <div>
-                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Due Date To</label>
+                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Created Date To</label>
                 <input type="date" name="to_date" value="{{ request('to_date') }}" class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300">
             </div>
 
@@ -208,7 +241,7 @@
                 <button type="submit" class="px-5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg transition-colors">
                     Apply Filters
                 </button>
-                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'from_date', 'to_date']))
+                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'order_type', 'from_date', 'to_date']))
                     <a href="{{ route('admin.work_orders.index', ['tab' => $currentTab, 'per_page' => $perPage]) }}" class="px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">
                         Reset Filters
                     </a>
@@ -288,7 +321,7 @@
                         <th class="px-4 py-3.5">Weight / Qty</th>
                         <th class="px-4 py-3.5">Craftsman</th>
                         <th class="px-4 py-3.5">Status</th>
-                        <th class="px-4 py-3.5">Order Date</th>
+                        <th class="px-4 py-3.5">Created Date</th>
                         <th class="px-4 py-3.5 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -368,14 +401,12 @@
                             </td>
 
                             <td class="px-4 py-3 text-xs">
-                                @if($order->return_due_date)
-                                    <div class="text-rose-600 font-bold">Rework: {{ \Carbon\Carbon::parse($order->return_due_date)->format('d M Y') }}</div>
-                                    <div class="line-through text-slate-400">{{ \Carbon\Carbon::parse($order->due_date)->format('d M Y') }}</div>
-                                @else
-                                    <div class="{{ \Carbon\Carbon::parse($order->due_date)->isPast() && $order->status !== 'completed' ? 'text-rose-600 font-bold' : 'text-slate-700' }}">
-                                        {{ \Carbon\Carbon::parse($order->created_at)->format('d M Y') }}
-                                    </div>
-                                @endif
+                                <div class="font-medium text-slate-800">
+                                    {{ $order->created_at ? \Carbon\Carbon::parse($order->created_at)->format('d M Y') : '—' }}
+                                </div>
+                                <div class="text-2xs text-slate-400">
+                                    {{ $order->created_at ? \Carbon\Carbon::parse($order->created_at)->format('h:i A') : '' }}
+                                </div>
                             </td>
 
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
@@ -422,7 +453,13 @@
         <div class="px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <form method="GET" action="{{ route('admin.work_orders.index') }}" class="flex items-center gap-2 text-xs text-slate-500">
                 @foreach(request()->except(['per_page', 'page']) as $name => $val)
-                    <input type="hidden" name="{{ $name }}" value="{{ $val }}">
+                    @if(is_array($val))
+                        @foreach($val as $item)
+                            <input type="hidden" name="{{ $name }}[]" value="{{ $item }}">
+                        @endforeach
+                    @else
+                        <input type="hidden" name="{{ $name }}" value="{{ $val }}">
+                    @endif
                 @endforeach
                 <span>Show:</span>
                 <select name="per_page" onchange="this.form.submit()" class="border border-slate-300 rounded px-2 py-1 bg-white text-xs font-semibold text-slate-700">

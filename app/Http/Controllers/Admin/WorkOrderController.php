@@ -71,8 +71,20 @@ class WorkOrderController extends Controller
             $query->where('design_code', $request->design_code);
         }
 
-        if ($request->filled('order_type')) {
-            $query->where('order_type', $request->order_type);
+        $selectedOrderTypes = $request->input('order_type');
+        if (!empty($selectedOrderTypes)) {
+            if (is_string($selectedOrderTypes)) {
+                $selectedOrderTypes = array_values(array_filter(array_map('trim', explode(',', $selectedOrderTypes))));
+            } elseif (is_array($selectedOrderTypes)) {
+                $selectedOrderTypes = array_values(array_filter(array_map('trim', $selectedOrderTypes)));
+            } else {
+                $selectedOrderTypes = [];
+            }
+            if (!empty($selectedOrderTypes)) {
+                $query->whereIn('order_type', $selectedOrderTypes);
+            }
+        } else {
+            $selectedOrderTypes = [];
         }
 
         if ($request->filled('nickname')) {
@@ -88,13 +100,13 @@ class WorkOrderController extends Controller
             });
         }
 
-        // 3. Date Filters
+        // 3. Date Filters (Filtered by Created Date)
         if ($request->filled('from_date')) {
-            $query->whereDate('due_date', '>=', $request->from_date);
+            $query->whereDate('created_at', '>=', $request->from_date);
         }
 
         if ($request->filled('to_date')) {
-            $query->whereDate('due_date', '<=', $request->to_date);
+            $query->whereDate('created_at', '<=', $request->to_date);
         }
 
         // Clone the query with all search/dropdown filters applied BEFORE applying the status tab filter
@@ -143,6 +155,7 @@ class WorkOrderController extends Controller
             'subcategories',
             'nicknames',
             'orderTypes',
+            'selectedOrderTypes',
             'craftsmen',
             'designCodes'
         ));
@@ -567,7 +580,7 @@ class WorkOrderController extends Controller
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls,ods,xlsm,xlsb', 'max:20240'],
-            'due_date_days' => ['required', 'integer', 'between:4,7'],
+            'due_date_days' => ['nullable', 'integer', 'min:1', 'max:60'],
         ]);
 
         $file = $request->file('file');
@@ -643,6 +656,29 @@ class WorkOrderController extends Controller
         $skippedCount = 0;
         $year = date('Y');
 
+        $parseCustomDate = function ($dateVal) {
+            if (empty($dateVal)) {
+                return null;
+            }
+            $trimmed = trim((string) $dateVal);
+            // Check if it's an Excel numeric date serial
+            if (is_numeric($trimmed) && (float) $trimmed > 25000 && (float) $trimmed < 65000) {
+                try {
+                    return Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $trimmed));
+                } catch (\Throwable $e) {}
+            }
+            foreach (['d/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.Y', 'm/d/Y', 'd/m/y', 'd-m-y', 'd/m/Y H:i', 'd-m-Y H:i', 'Y-m-d H:i:s', 'd/m/Y H:i:s'] as $format) {
+                try {
+                    return Carbon::createFromFormat($format, $trimmed);
+                } catch (\Throwable $e) {}
+            }
+            try {
+                return Carbon::parse($trimmed);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+
         foreach ($rows as $cleanRow) {
             $getVal = function (array $keys) use ($cleanRow) {
                 foreach ($keys as $key) {
@@ -662,10 +698,11 @@ class WorkOrderController extends Controller
                 continue;
             }
 
-            $unitType     = $getVal(['unit', 'unit type', 'unit_type']) ?? 'pcs';
-            $orderDateStr = $getVal(['order date', 'orderdate', 'date']);
-            $productName  = $getVal(['Product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
-            $designCode   = $getVal(['Design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
+            $unitType        = $getVal(['unit', 'unit type', 'unit_type']) ?? 'pcs';
+            $orderDateStr    = $getVal(['order date', 'orderdate', 'date', 'order_date', 'created at', 'created_at']);
+            $expectedDateStr = $getVal(['expected date', 'expected_date', 'expecteddate', 'exp date', 'exp. date', 'exp_date', 'due date', 'due_date', 'duedate', 'expected delivery date', 'delivery date']);
+            $productName     = $getVal(['Product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
+            $designCode      = $getVal(['Design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
 
             $excelNickname = $getVal(['nickname', 'design nickname', 'design_nickname', 'alias']);
             $seal          = $getVal(['seal', '916 seal', 'hallmark seal', 'seal type']) ?? (stripos($referenceNo ?? '', 'ESO') !== false ? '916' : null);
@@ -676,26 +713,22 @@ class WorkOrderController extends Controller
             $instructions  = $getVal(['remarks', 'instruction', 'instructions', 'note']);
             $orderType     = $getVal(['Order Type', 'order_type', 'ordertype']);
 
-            $parsedDate = now();
-            if (!empty($orderDateStr)) {
-                try {
-                    $parsedDate = Carbon::createFromFormat('d/m/Y', trim($orderDateStr));
-                } catch (\Exception $e) {
-                    try {
-                        $parsedDate = Carbon::parse($orderDateStr);
-                    } catch (\Exception $ex) {
-                        $parsedDate = now();
-                    }
-                }
+            // Order Date becomes Created Date
+            $parsedCreatedDate = $parseCustomDate($orderDateStr) ?? now();
+
+            // Expected Date becomes Due Date for every order
+            $parsedExpectedDate = $parseCustomDate($expectedDateStr);
+            $dueDateDays = (int) ($request->due_date_days ?? 7);
+
+            if ($parsedExpectedDate) {
+                $dueDate = $parsedExpectedDate->toDateString();
+            } else {
+                $dueDate = $parsedCreatedDate->copy()->addDays($dueDateDays)->toDateString();
             }
 
-            // Automatically set Due Date to the requested days after TODAY (not the old order date)
-            $dueDateDays = (int) $request->due_date_days;
-            $dueDate = now()->addDays($dueDateDays);
-
             $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
-            $nextNumber = $lastOrder ? ((int) substr($lastOrder->work_order_no, -4)) + 1 : ($importedCount + 1);
-            $workOrderNo = 'WO-' . $year . '_' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            $nextNumber = $lastOrder ? ((int) substr(str_replace('_', '-', $lastOrder->work_order_no), -4)) + 1 : ($importedCount + 1);
+            $workOrderNo = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
             $designCodeStr = !empty($designCode) ? $designCode : 'DEFAULT';
 
@@ -730,7 +763,7 @@ class WorkOrderController extends Controller
                 }
             }
 
-            WorkOrder::create([
+            $workOrder = WorkOrder::create([
                 'work_order_no'   => $workOrderNo,
                 'reference_no'    => $referenceNo,
                 'product_name'    => $productName,
@@ -747,16 +780,22 @@ class WorkOrderController extends Controller
                 'instructions'    => $instructions,
                 'craftsman_id'    => $craftsmanId,
                 'status'          => $status,
-                'due_date'        => $dueDate, // Populated automatically 7 days past order date
+                'due_date'        => $dueDate,
                 'allocated_at'    => $craftsmanId ? Carbon::now() : null,
-                'created_at'      => $parsedDate,
+                'created_at'      => $parsedCreatedDate,
                 'order_type'      => $orderType,
                 'design_image'    => $imagePath,
             ]);
+
+            if ($parsedCreatedDate && $workOrder->created_at != $parsedCreatedDate) {
+                $workOrder->created_at = $parsedCreatedDate;
+                $workOrder->saveQuietly();
+            }
+
             $importedCount++;
         }
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
-        return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders with calculated due dates. ({$skippedCount} duplicates skipped).");
+        return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders. ({$skippedCount} duplicates skipped).");
     }
 }

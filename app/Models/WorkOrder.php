@@ -51,6 +51,7 @@ class WorkOrder extends Model
         'return_due_date',
         'return_count',
         'order_type',
+        'created_at',
     ];
 
     #[Override]
