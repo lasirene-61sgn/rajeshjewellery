@@ -283,7 +283,7 @@
                             </div>
                             <div class="flex justify-between items-baseline pt-1">
                                 <span class="text-xs font-bold text-slate-800 truncate">Size : {{ $order->size }}</span>
-                                <span class="text-xs font-extrabold text-amber-600">Length : {{ ($order->length) }}</span>
+                                <span class="text-xs font-extrabold text-amber-600">QTY : {{ ($order->job_type) }}</span>
                             </div>
                             <div class="text-[10px] text-slate-500 flex justify-between pt-2 border-t border-slate-100">
                                 <span class="font-semibold">{{ $order->reference_no }}</span>
@@ -457,12 +457,12 @@
                         </div>
                     </template>
 
-                    <template x-if="ordersList[currentIndex]?.length">
+                    <!-- <template x-if="ordersList[currentIndex]?.length">
                         <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
                             <span class="text-[10px] text-slate-400 block uppercase font-bold">Length</span>
                             <span class="text-xs font-bold text-slate-800" x-text="ordersList[currentIndex].length"></span>
                         </div>
-                    </template>
+                    </template> -->
 
                     <template x-if="ordersList[currentIndex]?.reference_no">
                         <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">

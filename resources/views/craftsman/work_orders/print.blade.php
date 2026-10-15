@@ -64,22 +64,22 @@
                         <div class="space-y-2">
                             <div class="flex items-center">
                                 <span class="font-bold w-28">SNo</span>
-                                <span class="font-normal">: {{ $order->id }}</span>
+                                <span class="font-bold w-28">: {{ $order->id }}</span>
                             </div>
                             <div class="flex items-center">
                                 <span class="font-bold w-28">Design</span>
-                                <span class="font-normal">: {{ $order->design_code }}</span>
+                                <span class="font-bold w-28">: {{ $order->design_code }}</span>
                             </div>
                             <div class="flex items-center">
                                 <span class="font-bold w-28">Order No</span>
-                                <span class="font-normal">: {{ $order->reference_no }}</span>
+                                <span class="font-bold w-28">: {{ $order->reference_no }}</span>
                                 <!-- @if($order->has_seal)
                                     <span class="ml-2 font-sans font-black text-xs bg-amber-100 text-amber-900 border border-amber-400 px-1.5 py-0.5 rounded">916 SEAL</span>
                                 @endif -->
                             </div>
                             <div class="flex items-center">
                                 <span class="font-bold w-28">Order Date</span>
-                                <span class="font-normal">: {{ $order->created_at->format('d-m-Y') }}</span>
+                                <span class="font-bold w-28">: {{ $order->created_at->format('d-m-Y') }}</span>
                             </div>
                         </div>
 
@@ -87,15 +87,15 @@
                         <div class="space-y-2">
                             <div class="flex items-center">
                                 <span class="font-bold w-24">Weight</span>
-                                <span class="font-normal">: {{ number_format($order->target_weight, 3) }}</span>
+                                <span class="font-bold w-24">: {{ number_format($order->target_weight, 3) }}</span>
                             </div>
                             <div class="flex items-center">
                                 <span class="font-bold w-24">Size</span>
-                                <span class="font-normal">: {{ $order->size ?? 'N/A' }}</span>
+                                <span class="font-bold w-24">: {{ $order->size ?? 'N/A' }}</span>
                             </div>
                             <div class="flex items-center">
                                 <span class="font-bold w-24">Qty</span>
-                                <span class="font-normal">: {{ $order->quantity }}</span>
+                                <span class="font-bold w-24">: {{ $order->quantity }}</span>
                             </div>
                         </div>
 
