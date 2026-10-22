@@ -21,11 +21,48 @@
     <!-- Filter Tabs -->
     <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-4">
         @php $currentStatus = request('status'); @endphp
-        <a href="{{ route('admin.orders.index') }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {{ is_null($currentStatus) ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">All Orders</a>
-        <a href="{{ route('admin.orders.index', ['status' => 'pending']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {{ $currentStatus == 'pending' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">Pending</a>
-        <a href="{{ route('admin.orders.index', ['status' => 'allocated']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {{ $currentStatus == 'allocated' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">Allocated</a>
-        <a href="{{ route('admin.orders.index', ['status' => 'in_progress']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {{ $currentStatus == 'in_progress' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">In Progress</a>
-        <a href="{{ route('admin.orders.index', ['status' => 'completed']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {{ $currentStatus == 'completed' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">Completed</a>
+        <a href="{{ route('admin.orders.index') }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ is_null($currentStatus) ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ is_null($currentStatus) ? 'bg-slate-300' : 'bg-slate-400' }}"></span>
+            All Orders
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ is_null($currentStatus) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600' }}">{{ $counts['all'] }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.orders.index', ['status' => 'pending']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'pending' ? 'bg-amber-400 text-slate-900 shadow-sm font-bold border border-amber-500' : 'bg-white text-slate-600 hover:bg-amber-50 hover:text-amber-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'pending' ? 'bg-slate-900' : 'bg-amber-400' }}"></span>
+            Pending
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'pending' ? 'bg-amber-300 text-slate-900 font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['pending'] }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.orders.index', ['status' => 'allocated']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'allocated' ? 'bg-sky-600 text-white shadow-sm font-bold border border-sky-700' : 'bg-white text-slate-600 hover:bg-sky-50 hover:text-sky-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'allocated' ? 'bg-white' : 'bg-sky-500' }}"></span>
+            Allocated
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'allocated' ? 'bg-sky-700 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['allocated'] }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.orders.index', ['status' => 'in_process']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'in_process' ? 'bg-orange-500 text-white shadow-sm font-bold border border-orange-600' : 'bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'in_process' ? 'bg-white' : 'bg-orange-500' }}"></span>
+            In Process
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'in_process' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['in_process'] }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.orders.index', ['status' => 'returned']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'returned' ? 'bg-red-600 text-white shadow-sm font-bold border border-red-700' : 'bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'returned' ? 'bg-white' : 'bg-red-500' }}"></span>
+            Returned
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'returned' ? 'bg-red-700 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['returned'] }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.orders.index', ['status' => 'completed']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'completed' ? 'bg-emerald-600 text-white shadow-sm font-bold border border-emerald-700' : 'bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'completed' ? 'bg-white' : 'bg-emerald-500' }}"></span>
+            Completed
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'completed' ? 'bg-emerald-700 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['completed'] }}</span>
+            @endif
+        </a>
     </div>
 
     <!-- Orders Table Card -->
@@ -92,15 +129,18 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @php
-                                    $badgeStyles = [
-                                        'pending' => 'bg-slate-100 text-slate-700 border-slate-200',
-                                        'allocated' => 'bg-sky-50 text-sky-700 border-sky-200',
-                                        'in_progress' => 'bg-indigo-50 text-indigo-700 border-indigo-200',
-                                        'completed' => 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    $badgeConfig = [
+                                        'pending'     => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'allocated'   => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
+                                        'in_process'  => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'returned'    => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
+                                        'completed'   => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed']
                                     ];
+                                    $st = $badgeConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-800 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucwords(str_replace('_', ' ', $order->status))];
                                 @endphp
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $badgeStyles[$order->status] ?? 'bg-slate-100 text-slate-800' }}">
-                                    {{ ucwords(str_replace('_', ' ', $order->status)) }}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border {{ $st['bg'] }}">
+                                    <span class="w-2 h-2 rounded-full shrink-0 {{ $st['dot'] }}"></span>
+                                    <span>{{ $st['label'] }}</span>
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-xs text-slate-500">

@@ -23,7 +23,16 @@ class OrderController extends Controller
         $orders = $query->latest()->paginate(10);
         $craftsmen = Craftsman::all();
 
-        return view('admin.orders.index', compact('orders', 'craftsmen'));
+        $counts = [
+            'all'        => Order::count(),
+            'pending'    => Order::where('status', 'pending')->count(),
+            'allocated'  => Order::where('status', 'allocated')->count(),
+            'in_process' => Order::where('status', 'in_process')->count(),
+            'returned'   => Order::where('status', 'returned')->count(),
+            'completed'  => Order::where('status', 'completed')->count(),
+        ];
+
+        return view('admin.orders.index', compact('orders', 'craftsmen', 'counts'));
     }
 
     public function create()

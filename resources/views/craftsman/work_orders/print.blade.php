@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Work Order Print Slip - Craftsman Portal</title>
+    <title>Work Order Print Slip - Admin Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @media print {
@@ -30,7 +30,7 @@
         }
     </style>
 </head>
-<body class="bg-stone-100 text-stone-900 font-serif">
+<body class="bg-stone-100 text-stone-900 font-sans">
     
     @php
         $orders = isset($workOrders) ? $workOrders : [$workOrder];
@@ -41,61 +41,63 @@
             <!-- Outer Page Border Container -->
             <div class="w-full h-full border-2 border-black p-4 flex flex-col justify-between">
                 
-                <!-- Main Jewelry Design Image Container -->
-                <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden relative">
+                <!-- Main Jewelry Design Image Container (Border Removed) -->
+                <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden bg-stone-50 relative">
                     @if($order->design_image)
                         <img src="{{ asset('storage/' . $order->design_image) }}" class="w-full h-full object-contain">
                     @else
-                        <div class="text-stone-400 font-sans font-bold text-base">No Design Image Available</div>
+                        <div class="text-stone-400 font-bold text-base">No Design Image Available</div>
                     @endif
 
+                    <!-- 916 Seal positioned at the bottom center of the image container in red color -->
                     @if($order->has_seal)
-                        <div class="absolute top-4 left-4 bg-amber-500 text-white font-sans font-black text-sm px-3 py-1 rounded shadow uppercase tracking-wider border border-amber-600">
+                        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black text-xs px-4 py-1 rounded shadow uppercase tracking-wider border border-red-700">
                             916 SEAL
                         </div>
                     @endif
                 </div>
 
-                <!-- Bottom Details Grid -->
-                <div class="w-full pt-4 text-base leading-relaxed text-black font-serif">
-                    <div class="grid grid-cols-2 gap-x-12 gap-y-2">
+                <!-- Specifications Data Table -->
+                <div class="w-full pt-4 text-base leading-relaxed text-black border-t-2 border-black">
+                    <div class="grid grid-cols-2 gap-x-12 gap-y-2 pt-1">
                         
                         <!-- Left Column -->
                         <div class="space-y-2">
-                            <div class="flex items-center">
-                                <span class="font-bold w-28">SNo</span>
-                                <span class="font-bold w-28">: {{ $order->id }}</span>
+                            <div class="flex items-start">
+                                <span class="font-bold w-32 shrink-0">SNo</span>
+                                <span class="font-bold">: {{ $order->id }}</span>
                             </div>
-                            <div class="flex items-center">
-                                <span class="font-bold w-28">Design</span>
-                                <span class="font-bold w-28">: {{ $order->design_code }}</span>
+                            <div class="flex items-start">
+                                <span class="font-bold w-32 shrink-0">Design</span>
+                                <span class="font-bold">: {{ $order->design_code }}</span>
                             </div>
-                            <div class="flex items-center">
-                                <span class="font-bold w-28">Order No</span>
-                                <span class="font-bold w-28">: {{ $order->reference_no }}</span>
-                                <!-- @if($order->has_seal)
-                                    <span class="ml-2 font-sans font-black text-xs bg-amber-100 text-amber-900 border border-amber-400 px-1.5 py-0.5 rounded">916 SEAL</span>
-                                @endif -->
+                            <div class="flex items-start">
+                                <span class="font-bold w-32 shrink-0">Order No</span>
+                                <span class="font-bold">: {{ $order->reference_no }}</span>
                             </div>
-                            <div class="flex items-center">
-                                <span class="font-bold w-28">Order Date</span>
-                                <span class="font-bold w-28">: {{ $order->created_at->format('d-m-Y') }}</span>
+                            <div class="flex items-start">
+                                <span class="font-bold w-32 shrink-0">Order Date</span>
+                                <span class="font-bold">: {{ $order->created_at->format('d/m/Y') }}</span>
                             </div>
                         </div>
 
                         <!-- Right Column -->
                         <div class="space-y-2">
-                            <div class="flex items-center">
-                                <span class="font-bold w-24">Weight</span>
-                                <span class="font-bold w-24">: {{ number_format($order->target_weight, 3) }}</span>
+                            <div class="flex items-start">
+                                <span class="font-bold w-28 shrink-0">Weight</span>
+                                <span class="font-bold">: {{ number_format($order->target_weight, 3) }} g</span>
                             </div>
-                            <div class="flex items-center">
-                                <span class="font-bold w-24">Size</span>
-                                <span class="font-bold w-24">: {{ $order->size ?? 'N/A' }}</span>
+                            <div class="flex items-start">
+                                <span class="font-bold w-28 shrink-0">Size</span>
+                                <span class="font-bold">: {{ $order->size ?? 'N/A' }}</span>
                             </div>
-                            <div class="flex items-center">
-                                <span class="font-bold w-24">Qty</span>
-                                <span class="font-bold w-24">: {{ $order->quantity }}</span>
+                            <div class="flex items-start">
+                                <span class="font-bold w-28 shrink-0">Qty</span>
+                                <span class="font-bold">: {{ $order->quantity }}</span>
+                            </div>
+                            <div class="flex items-start">
+                                <span class="font-bold w-28 shrink-0">Due Date</span>
+                                <span class="font-bold">: {{ isset($order->due_date) ? \Carbon\Carbon::parse($order->due_date)->format('d/m/Y') : '' }}</span>
                             </div>
                         </div>
 
@@ -108,7 +110,7 @@
 
     <!-- On-screen Print Button -->
     <div class="text-center my-6 print:hidden">
-        <button onclick="window.print()" class="px-8 py-3 bg-stone-900 text-white font-sans font-bold text-sm rounded-lg shadow-md hover:bg-stone-800">
+        <button onclick="window.print()" class="px-8 py-3 bg-indigo-600 text-white font-bold text-sm rounded-xl shadow-md hover:bg-indigo-700">
             Print Slip(s)
         </button>
     </div>

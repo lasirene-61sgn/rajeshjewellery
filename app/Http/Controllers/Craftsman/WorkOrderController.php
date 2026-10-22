@@ -24,7 +24,7 @@ class WorkOrderController extends Controller
         }
 
         $today = Carbon::today()->toDateString();
-        $query = WorkOrder::where('craftsman_id', $craftsmanId)->latest();
+        $query = WorkOrder::where('craftsman_id', $craftsmanId)->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
         if ($request->filled('search')) {
             $search = trim($request->search);
@@ -42,6 +42,10 @@ class WorkOrderController extends Controller
 
         if ($request->filled('design_code')) {
             $query->where('design_code', $request->design_code);
+        }
+
+        if ($request->filled('product_name')) {
+            $query->where('product_name', $request->product_name);
         }
 
         if ($request->filled('nickname')) {
@@ -62,11 +66,16 @@ class WorkOrderController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        // Status Tabs Logic (Direct In-Process on allocation, plus For Approval & Overdue)
+        $baseQuery = clone $query;
+
+        // Status Tabs Logic (All, In-Process, For Approval, Completed, Overdue)
         match ($currentTab) {
+            'all'          => null,
             'allocated'    => $query->where('status', 'allocated'),
             'in_process'   => $query->whereIn('status', ['in_process', 'returned']),
+            'returned'     => $query->where('status', 'returned'),
             'for_approval' => $query->where('status', 'for_approval'),
+            'completed'    => $query->where('status', 'completed'),
             'overdue'      => $query->where('status', '!=', 'completed')
                                     ->where(function ($q) use ($today) {
                                         $q->whereDate('return_due_date', '<', $today)
@@ -74,15 +83,16 @@ class WorkOrderController extends Controller
                                               $sub->whereNull('return_due_date')->whereDate('due_date', '<', $today);
                                           });
                                     }),
-            default        => $query->whereIn('status', ['in_process', 'returned']),
+            default        => null,
         };
 
         $counts = [
-            'allocated'    => WorkOrder::where('craftsman_id', $craftsmanId)->where('status', 'allocated')->count(),
-            'in_process'   => WorkOrder::where('craftsman_id', $craftsmanId)->whereIn('status', ['in_process', 'returned'])->count(),
-            'for_approval' => WorkOrder::where('craftsman_id', $craftsmanId)->where('status', 'for_approval')->count(),
-            'overdue'      => WorkOrder::where('craftsman_id', $craftsmanId)
-                                      ->where('status', '!=', 'completed')
+            'all'          => (clone $baseQuery)->count(),
+            'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
+            'in_process'   => (clone $baseQuery)->whereIn('status', ['in_process', 'returned'])->count(),
+            'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
+            'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
+            'overdue'      => (clone $baseQuery)->where('status', '!=', 'completed')
                                       ->where(function ($q) use ($today) {
                                           $q->whereDate('return_due_date', '<', $today)
                                             ->orWhere(function ($sub) use ($today) {
@@ -95,6 +105,7 @@ class WorkOrderController extends Controller
         $designCodes = $craftsman->designCodes()->orderBy('code')->get();
         $categories = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('category')->distinct()->pluck('category')->filter()->values();
         $subcategories = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('subcategory')->distinct()->pluck('subcategory')->filter()->values();
+        $productNames = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->pluck('product_name')->sort()->values();
         
         $nicknames = DesignCode::whereHas('craftsmen', fn($q) => $q->where('craftsmen.id', $craftsmanId))
             ->pluck('nickname')->unique()->values();
@@ -103,7 +114,7 @@ class WorkOrderController extends Controller
 
         session(['craftsman_work_orders_url' => request()->fullUrl()]);
 
-        return view('craftsman.work_orders.index', compact('workOrders', 'counts', 'currentTab', 'perPage', 'designCodes', 'categories', 'subcategories', 'nicknames'));
+        return view('craftsman.work_orders.index', compact('workOrders', 'counts', 'currentTab', 'perPage', 'designCodes', 'categories', 'subcategories', 'nicknames', 'productNames'));
     }
 
     public function show(WorkOrder $workOrder): View

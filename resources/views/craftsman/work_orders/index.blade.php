@@ -14,6 +14,7 @@
     categorySearch: '',
     subCategorySearch: '',
     designCodeSearch: '',
+    productNameSearch: '',
     nicknameSearch: '',
     toggleSelectAll() { 
         this.selectAll = !this.selectAll; 
@@ -59,6 +60,11 @@
         if (!this.designCodeSearch) return designCodes;
         return designCodes.filter(dc => dc.code.toLowerCase().includes(this.designCodeSearch.toLowerCase()));
     },
+    get filteredProductNames() {
+        const productNames = @js($productNames ?? []);
+        if (!this.productNameSearch) return productNames;
+        return productNames.filter(p => p.toLowerCase().includes(this.productNameSearch.toLowerCase()));
+    },
     get filteredNicknames() {
         const nicknames = @js($nicknames ?? []);
         if (!this.nicknameSearch) return nicknames;
@@ -78,14 +84,15 @@
     <div class="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
         @php
         $tabs = [
-        'in_process' => ['label' => 'In Process', 'count' => $counts['in_process']],
-        'for_approval' => ['label' => 'For Approval', 'count' => $counts['for_approval']],
-        'overdue' => ['label' => 'Overdue', 'count' => $counts['overdue']],
+            'in_process'   => ['label' => 'In Process', 'count' => $counts['in_process'], 'dot' => 'bg-orange-500'],
+            'for_approval' => ['label' => 'For Approval', 'count' => $counts['for_approval'], 'dot' => 'bg-indigo-400 animate-pulse'],
+            'overdue'      => ['label' => 'Overdue', 'count' => $counts['overdue'], 'dot' => 'bg-rose-500'],
         ];
         @endphp
         @foreach($tabs as $key => $tab)
-        <a href="{{ route('craftsman.work-orders.index', ['tab' => $key, 'per_page' => $perPage ?? 15]) }}"
+        <a href="{{ request()->fullUrlWithQuery(['tab' => $key, 'page' => 1]) }}"
             class="inline-flex items-center px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap shadow-xs border {{ $currentTab === $key ? 'bg-slate-900 text-amber-400 border-slate-900 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:text-slate-800' }}">
+            <span class="w-2 h-2 rounded-full mr-2 shrink-0 {{ $tab['dot'] }}"></span>
             {{ $tab['label'] }}
             <span class="ml-2 px-2 py-0.5 text-[10px] rounded-full {{ $currentTab === $key ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-500' }}">
                 {{ $tab['count'] }}
@@ -200,6 +207,31 @@
                 </div>
             </div>
 
+            <!-- Product Name Searchable Dropdown -->
+            <div class="w-44" x-data="{ open: false, selected: '{{ request('product_name') }}' }">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Product Name</label>
+                <div class="relative">
+                    <button type="button" @click="open = !open" class="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-xl bg-white text-left flex items-center justify-between hover:border-amber-400 transition-colors">
+                        <span x-text="selected || 'All Products'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    <input type="hidden" name="product_name" :value="selected">
+                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                        <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                            <input type="text" x-model="productNameSearch" placeholder="Search product..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div class="py-1">
+                            <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-amber-50 text-slate-600">All Products</button>
+                            <template x-for="pname in filteredProductNames" :key="pname">
+                                <button type="button" @click="selected = pname; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-amber-50" :class="selected === pname ? 'bg-amber-50 text-amber-700 font-medium' : 'text-slate-700'" x-text="pname"></button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="w-32">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Date From</label>
                 <input type="date" name="date_from" value="{{ request('date_from') }}" class="w-full px-2 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-colors">
@@ -221,7 +253,7 @@
 
             <div class="flex items-center gap-2 pb-0.5">
                 <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition-all">Filter</button>
-                @if(request()->anyFilled(['search', 'category', 'sub_category', 'design_code', 'nickname', 'date_from', 'date_to']))
+                @if(request()->anyFilled(['search', 'category', 'sub_category', 'design_code', 'nickname', 'product_name', 'date_from', 'date_to']))
                 <a href="{{ route('craftsman.work-orders.index', ['tab' => $currentTab]) }}" class="px-4 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-colors">Clear</a>
                 @endif
             </div>
@@ -249,6 +281,12 @@
                     <div class="absolute top-2 left-2 right-2 z-10 flex justify-between items-center pointer-events-none">
                         @if($order->status === 'returned')
                         <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-rose-100 text-rose-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-rose-200">QC Defect</span>
+                        @elseif($order->status === 'completed')
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-emerald-100 text-emerald-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-emerald-200">Completed</span>
+                        @elseif($order->status === 'for_approval')
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-amber-100 text-amber-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-amber-200">For QC</span>
+                        @elseif($order->status === 'in_process')
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-orange-100 text-orange-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-orange-200">In Process</span>
                         @else
                         <span></span>
                         @endif
@@ -304,7 +342,7 @@
             <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center flex-wrap gap-3">
                 <div class="flex items-center gap-2">
                     <button type="button" @click="submitBulkAction('{{ route('craftsman.work-orders.bulk-print') }}')" class="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all">Print Selected Slips</button>
-                    @if($currentTab === 'in_process')
+                    @if(in_array($currentTab, ['all', 'in_process']))
                     <button type="button" @click="submitBulkAction('{{ route('craftsman.work-orders.bulk-submit') }}')" class="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">Bulk Submit for Approval</button>
                     @endif
                 </div>
@@ -345,15 +383,24 @@
                             </td>
                             <td class="px-4 py-3">
                                 <span class="font-bold text-slate-900 block">{{ $order->reference_no }}</span>
-                                <!-- @if($order->reference_no)
-                                        <span class="text-xs text-slate-400 block">{{ $order->reference_no }}</span>
-                                    @endif -->
-                                <!-- @if($order->has_seal)
-                                        <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">916 SEAL</span>
-                                    @endif -->
-                                @if($order->status === 'returned')
-                                <span class="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">QC Defect</span>
+                                @if($order->work_order_no)
+                                <!-- <span class="text-[11px] text-slate-400 block">{{ $order->work_order_no }}</span> -->
                                 @endif
+                                @php
+                                    $statusConfig = [
+                                        'pending'      => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'allocated'    => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
+                                        'in_process'   => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'for_approval' => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
+                                        'returned'     => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'QC Defect'],
+                                        'completed'    => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
+                                    ];
+                                    $st = $statusConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucfirst(str_replace('_', ' ', $order->status))];
+                                @endphp
+                                <span class="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border {{ $st['bg'] }}">
+                                    <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $st['dot'] }}"></span>
+                                    <span>{{ $st['label'] }}@if($order->status === 'returned' && $order->return_count) (x{{ $order->return_count }})@endif</span>
+                                </span>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-slate-800">{{ $order->product_name }}</div>
@@ -495,7 +542,7 @@
             <span class="text-slate-400 group-hover:text-amber-400 transition-colors">Filter</span>
         </button>
 
-        @if($currentTab === 'in_process')
+        @if(in_array($currentTab, ['all', 'in_process']))
         <button type="button" @click="submitBulkAction('{{ route('craftsman.work-orders.bulk-submit') }}')" class="flex flex-col items-center space-y-1 text-xs font-medium focus:outline-none group">
             <svg class="w-6 h-6 text-slate-400 group-hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -611,6 +658,29 @@
                             <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-amber-50 text-slate-600">All Nicknames</button>
                             <template x-for="nickname in filteredNicknames" :key="nickname">
                                 <button type="button" @click="selected = nickname; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-amber-50" :class="selected === nickname ? 'bg-amber-50 text-amber-700 font-medium' : 'text-slate-700'" x-text="nickname"></button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Name Searchable Dropdown -->
+                <div class="relative" x-data="{ open: false, selected: '{{ request('product_name') }}' }">
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Product Name</label>
+                    <button type="button" @click="open = !open" class="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-xl bg-white text-left flex items-center justify-between hover:border-amber-400 transition-colors">
+                        <span x-text="selected || 'All Products'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    <input type="hidden" name="product_name" :value="selected">
+                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                        <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                            <input type="text" x-model="productNameSearch" placeholder="Search product..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div class="py-1">
+                            <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-amber-50 text-slate-600">All Products</button>
+                            <template x-for="pname in filteredProductNames" :key="pname">
+                                <button type="button" @click="selected = pname; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-amber-50" :class="selected === pname ? 'bg-amber-50 text-amber-700 font-medium' : 'text-slate-700'" x-text="pname"></button>
                             </template>
                         </div>
                     </div>

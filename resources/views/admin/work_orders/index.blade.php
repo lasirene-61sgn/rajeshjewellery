@@ -32,21 +32,71 @@
         <nav class="flex space-x-2 overflow-x-auto pb-1" aria-label="Tabs">
             @php
                 $tabs = [
-                    'all'          => ['label' => 'All Orders', 'count' => $counts['all']],
-                    'pending'      => ['label' => 'Pending', 'count' => $counts['pending']],
-                    'allocated'    => ['label' => 'Allocated', 'count' => $counts['allocated']],
-                    'in_process'   => ['label' => 'In Process / Rework', 'count' => $counts['in_process']],
-                    'for_approval' => ['label' => 'For Approval', 'count' => $counts['for_approval']],
-                    'completed'    => ['label' => 'Completed', 'count' => $counts['completed']],
-                    'overdue'      => ['label' => 'Overdue', 'count' => $counts['overdue']],
+                    'all' => [
+                        'label' => 'All Orders',
+                        'count' => $counts['all'],
+                        'dot' => 'bg-slate-400',
+                        'active' => 'border-slate-800 text-slate-900 bg-slate-50',
+                        'badge_active' => 'bg-slate-900 text-white',
+                    ],
+                    'pending' => [
+                        'label' => 'Pending',
+                        'count' => $counts['pending'],
+                        'dot' => 'bg-amber-400',
+                        'active' => 'border-amber-400 text-amber-900 bg-amber-50/80',
+                        'badge_active' => 'bg-amber-400 text-slate-900 font-bold',
+                    ],
+                    'allocated' => [
+                        'label' => 'Allocated',
+                        'count' => $counts['allocated'],
+                        'dot' => 'bg-sky-500',
+                        'active' => 'border-sky-500 text-sky-900 bg-sky-50/80',
+                        'badge_active' => 'bg-sky-500 text-white font-bold',
+                    ],
+                    'in_process' => [
+                        'label' => 'In Process',
+                        'count' => $counts['in_process'],
+                        'dot' => 'bg-orange-500',
+                        'active' => 'border-orange-500 text-orange-900 bg-orange-50/80',
+                        'badge_active' => 'bg-orange-500 text-white font-bold',
+                    ],
+                    'returned' => [
+                        'label' => 'Returned',
+                        'count' => $counts['returned'],
+                        'dot' => 'bg-red-500',
+                        'active' => 'border-red-500 text-red-900 bg-rose-50/80',
+                        'badge_active' => 'bg-red-500 text-white font-bold',
+                    ],
+                    'for_approval' => [
+                        'label' => 'For Approval',
+                        'count' => $counts['for_approval'],
+                        'dot' => 'bg-indigo-500 animate-pulse',
+                        'active' => 'border-indigo-500 text-indigo-900 bg-indigo-50/80',
+                        'badge_active' => 'bg-indigo-500 text-white font-bold',
+                    ],
+                    'completed' => [
+                        'label' => 'Completed',
+                        'count' => $counts['completed'],
+                        'dot' => 'bg-emerald-500',
+                        'active' => 'border-emerald-500 text-emerald-900 bg-emerald-50/80',
+                        'badge_active' => 'bg-emerald-500 text-white font-bold',
+                    ],
+                    'overdue' => [
+                        'label' => 'Overdue',
+                        'count' => $counts['overdue'],
+                        'dot' => 'bg-red-600',
+                        'active' => 'border-red-600 text-red-900 bg-red-50/80',
+                        'badge_active' => 'bg-red-600 text-white font-bold',
+                    ],
                 ];
             @endphp
 
             @foreach($tabs as $key => $tab)
                 <a href="{{ request()->fullUrlWithQuery(['tab' => $key, 'page' => 1]) }}"
-                   class="inline-flex items-center px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-b-2 whitespace-nowrap {{ $currentTab === $key ? 'border-indigo-600 text-indigo-600 bg-white font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }}">
+                   class="inline-flex items-center px-4 py-2.5 rounded-t-lg text-sm font-medium transition-all border-b-2 whitespace-nowrap {{ $currentTab === $key ? ($tab['active'] . ' font-bold') : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }}">
+                    <span class="w-2.5 h-2.5 rounded-full mr-2 shrink-0 {{ $tab['dot'] }}"></span>
                     {{ $tab['label'] }}
-                    <span class="ml-2 px-2 py-0.5 text-xs rounded-full {{ $currentTab === $key ? 'bg-indigo-100 text-indigo-700 font-bold' : 'bg-slate-100 text-slate-600' }}">
+                    <span class="ml-2 px-2 py-0.5 text-xs rounded-full {{ $currentTab === $key ? ($tab['badge_active'] . ' font-bold') : 'bg-slate-100 text-slate-600' }}">
                         {{ $tab['count'] }}
                     </span>
                 </a>
@@ -150,6 +200,27 @@
                 </div>
             </div>
 
+            <!-- Product Name Searchable Dropdown -->
+            <div class="relative" x-data="{ open: false, selected: '{{ request('product_name') }}' }">
+                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Product Name</label>
+                <button type="button" @click="open = !open" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500">
+                    <span x-text="selected || 'All Products'" class="truncate" :class="selected ? 'text-slate-800 font-medium' : 'text-slate-400'"></span>
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <input type="hidden" name="product_name" :value="selected">
+                <div x-show="open" @click.away="open = false" x-transition class="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    <div class="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <input type="text" x-model="productNameSearch" placeholder="Search product..." class="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="py-1">
+                        <button type="button" @click="selected = ''; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 text-slate-600">All Products</button>
+                        <template x-for="pname in filteredProductNames" :key="pname">
+                            <button type="button" @click="selected = pname; open = false" class="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50" :class="selected === pname ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-700'" x-text="pname"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
             <!-- Order Type Multi-Select Searchable Dropdown -->
             <div class="relative" x-data="{
                 open: false,
@@ -241,7 +312,7 @@
                 <button type="submit" class="px-5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg transition-colors">
                     Apply Filters
                 </button>
-                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'order_type', 'from_date', 'to_date']))
+                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'order_type', 'product_name', 'from_date', 'to_date']))
                     <a href="{{ route('admin.work_orders.index', ['tab' => $currentTab, 'per_page' => $perPage]) }}" class="px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">
                         Reset Filters
                     </a>
@@ -327,7 +398,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200">
                     @forelse($workOrders as $order)
-                        <tr class="hover:bg-slate-50 transition-colors {{ $order->status === 'returned' ? 'bg-amber-50/40' : '' }}">
+                        <tr class="hover:bg-slate-50 transition-colors {{ $order->status === 'returned' ? 'bg-rose-50/30' : '' }}">
                             <td class="p-4">
                                 <input type="checkbox" :value="{{ $order->id }}" x-model="selectedOrders" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
                             </td>
@@ -350,9 +421,9 @@
                             </td>
 
                             <td class="px-4 py-3">
-                                <div class="font-bold text-slate-900 font-mono">{{ $order->work_order_no }}</div>
+                                <!-- <div class="font-bold text-slate-900 font-mono">{{ $order->work_order_no }}</div> -->
                                 @if($order->reference_no)
-                                    <div class="text-xs text-slate-400">Ref: {{ $order->reference_no }}</div>
+                                    <div class="font-bold text-slate-900 font-mono">Ref: {{ $order->reference_no }}</div>
                                 @endif
                                 <!-- @if($order->has_seal)
                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 mt-1">
@@ -397,19 +468,19 @@
 
                             <td class="px-4 py-3">
                                 @php
-                                    $badge = match($order->status) {
-                                        'pending'      => 'bg-slate-100 text-slate-700 border-slate-200',
-                                        'allocated'    => 'bg-blue-50 text-blue-700 border-blue-200',
-                                        'in_process'   => 'bg-indigo-50 text-indigo-700 border-indigo-200',
-                                        'for_approval' => 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse',
-                                        'returned'     => 'bg-rose-50 text-rose-700 border-rose-200 font-bold',
-                                        'completed'    => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                        default        => 'bg-slate-100 text-slate-600 border-slate-200'
-                                    };
+                                    $statusConfig = [
+                                        'pending'      => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'allocated'    => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
+                                        'in_process'   => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'for_approval' => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
+                                        'returned'     => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
+                                        'completed'    => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
+                                    ];
+                                    $st = $statusConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucfirst(str_replace('_', ' ', $order->status))];
                                 @endphp
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border {{ $badge }}">
-                                    {{ ucfirst(str_replace('_', ' ', $order->status)) }}
-                                    @if($order->status === 'returned') (x{{ $order->return_count }}) @endif
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border {{ $st['bg'] }}">
+                                    <span class="w-2 h-2 rounded-full shrink-0 {{ $st['dot'] }}"></span>
+                                    <span>{{ $st['label'] }}@if($order->status === 'returned') (x{{ $order->return_count }})@endif</span>
                                 </span>
                             </td>
 
@@ -620,6 +691,7 @@
             subcategorySearch: '',
             craftsmanSearch: '',
             designCodeSearch: '',
+            productNameSearch: '',
             nicknameSearch: '',
             orderSearch: '',
 
@@ -647,6 +719,11 @@
                 const designCodes = @js($designCodes ?? []);
                 if (!this.designCodeSearch) return designCodes;
                 return designCodes.filter(dc => dc.code.toLowerCase().includes(this.designCodeSearch.toLowerCase()));
+            },
+            get filteredProductNames() {
+                const productNames = @js($productNames ?? []);
+                if (!this.productNameSearch) return productNames;
+                return productNames.filter(p => p.toLowerCase().includes(this.productNameSearch.toLowerCase()));
             },
             get filteredNicknames() {
                 const nicknames = @js($nicknames ?? []);

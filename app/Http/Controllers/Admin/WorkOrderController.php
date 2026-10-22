@@ -23,7 +23,7 @@ class WorkOrderController extends Controller
             $perPage = 15;
         }
 
-        $query = WorkOrder::with('craftsman')->orderBy('id', 'desc');
+        $query = WorkOrder::with('craftsman')->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
         // 1. Search Query
         if ($request->filled('search')) {
@@ -71,6 +71,10 @@ class WorkOrderController extends Controller
             $query->where('design_code', $request->design_code);
         }
 
+        if ($request->filled('product_name')) {
+            $query->where('product_name', $request->product_name);
+        }
+
         $selectedOrderTypes = $request->input('order_type');
         if (!empty($selectedOrderTypes)) {
             if (is_string($selectedOrderTypes)) {
@@ -116,7 +120,8 @@ class WorkOrderController extends Controller
         match ($currentTab) {
             'pending'      => $query->where('status', 'pending'),
             'allocated'    => $query->where('status', 'allocated'),
-            'in_process'   => $query->whereIn('status', ['in_process', 'returned']),
+            'in_process'   => $query->where('status', 'in_process'),
+            'returned'     => $query->where('status', 'returned'),
             'for_approval' => $query->where('status', 'for_approval'),
             'completed'    => $query->where('status', 'completed'),
             'overdue'      => $query->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today()),
@@ -128,7 +133,8 @@ class WorkOrderController extends Controller
             'all'          => (clone $baseQuery)->count(),
             'pending'      => (clone $baseQuery)->where('status', 'pending')->count(),
             'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
-            'in_process'   => (clone $baseQuery)->whereIn('status', ['in_process', 'returned'])->count(),
+            'in_process'   => (clone $baseQuery)->where('status', 'in_process')->count(),
+            'returned'     => (clone $baseQuery)->where('status', 'returned')->count(),
             'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
             'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
             'overdue'      => (clone $baseQuery)->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today())->count(),
@@ -140,6 +146,7 @@ class WorkOrderController extends Controller
         $orderTypes    = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type')->sort()->values();
         $craftsmen     = Craftsman::orderBy('name')->get();
         $designCodes   = DesignCode::with('craftsmen')->orderBy('code')->get();
+        $productNames  = WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->pluck('product_name')->sort()->values();
 
         $workOrders = $query->paginate($perPage)->withQueryString();
 
@@ -157,7 +164,8 @@ class WorkOrderController extends Controller
             'orderTypes',
             'selectedOrderTypes',
             'craftsmen',
-            'designCodes'
+            'designCodes',
+            'productNames'
         ));
     }
 
