@@ -58,7 +58,7 @@
                         'count' => $counts['in_process'],
                         'dot' => 'bg-orange-500',
                         'active' => 'border-orange-500 text-orange-900 bg-orange-50/80',
-                        'badge_active' => 'bg-orange-500 text-white font-bold',
+                        'badge_active' => 'bg-orange-500 text-orange font-bold',
                     ],
                     'returned' => [
                         'label' => 'Returned',
@@ -387,9 +387,12 @@
                             <input type="checkbox" @change="toggleSelectAll($event)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
                         </th>
                         <th class="px-4 py-3.5">Image</th>
-                        <th class="px-4 py-3.5">Order / Ref No</th>
+                        <th class="px-4 py-3.5">Ref No</th>
+                        <th class="px-4 py-3.5">Order No</th>
                         <th class="px-4 py-3.5">Product & Design Code (Nickname)</th>
-                        <th class="px-4 py-3.5">Weight / Qty</th>
+                        <th class="px-4 py-3.5">Weight</th>
+                        <th class="px-4 py-3.5">Length</th>
+                        <th class="px-4 py-3.5">Qty</th>
                         <th class="px-4 py-3.5">Craftsman</th>
                         <th class="px-4 py-3.5">Status</th>
                         <th class="px-4 py-3.5">Created Date</th>
@@ -423,8 +426,20 @@
                             <td class="px-4 py-3">
                                 <!-- <div class="font-bold text-slate-900 font-mono">{{ $order->work_order_no }}</div> -->
                                 @if($order->reference_no)
-                                    <div class="font-bold text-slate-900 font-mono">Ref: {{ $order->reference_no }}</div>
+                                    <div class="font-bold text-slate-900 font-mono">{{ $order->reference_no }}</div>
                                 @endif
+                                <!-- @if($order->has_seal)
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 mt-1">
+                                        <svg class="w-2.5 h-2.5 mr-1 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                        916 SEAL
+                                    </span>
+                                @endif -->
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="font-bold text-slate-900 font-mono">{{ $order->work_order_no }}</div>
+                                <!-- @if($order->reference_no)
+                                    <div class="font-bold text-slate-900 font-mono">Ref: {{ $order->reference_no }}</div>
+                                @endif -->
                                 <!-- @if($order->has_seal)
                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 mt-1">
                                         <svg class="w-2.5 h-2.5 mr-1 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
@@ -447,7 +462,13 @@
 
                             <td class="px-4 py-3">
                                 <div class="font-medium text-slate-800">{{ number_format($order->target_weight, 3) }}g</div>
-                                <div class="text-xs text-slate-400">{{ $order->quantity }} {{ $order->unit_type }}</div>
+                                <!-- <div class="text-xs text-slate-400">{{ $order->quantity }} {{ $order->unit_type }}</div> -->
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-slate-800">{{ ($order->size) }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-slate-800">{{ ($order->quantity) }}</div>
                             </td>
 
                             <td class="px-4 py-3">
@@ -469,11 +490,11 @@
                             <td class="px-4 py-3">
                                 @php
                                     $statusConfig = [
-                                        'pending'      => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'pending'      => ['bg' => 'bg-amber-100 text-amber-700 border-amber-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
                                         'allocated'    => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
-                                        'in_process'   => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'in_process'   => ['bg' => 'bg-orange-50 text-orange-700 border-orange-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
                                         'for_approval' => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
-                                        'returned'     => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
+                                        'returned'     => ['bg' => 'bg-red-50 text-red-800 border-red-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
                                         'completed'    => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
                                     ];
                                     $st = $statusConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucfirst(str_replace('_', ' ', $order->status))];

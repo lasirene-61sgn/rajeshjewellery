@@ -84,7 +84,7 @@
     <div class="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
         @php
         $tabs = [
-            'in_process'   => ['label' => 'In Process', 'count' => $counts['in_process'], 'dot' => 'bg-orange-500'],
+            'in_process'   => ['label' => 'Order Pending', 'count' => $counts['in_process'], 'dot' => 'bg-orange-500'],
             'for_approval' => ['label' => 'For Approval', 'count' => $counts['for_approval'], 'dot' => 'bg-indigo-400 animate-pulse'],
             'overdue'      => ['label' => 'Overdue', 'count' => $counts['overdue'], 'dot' => 'bg-rose-500'],
         ];
@@ -356,6 +356,7 @@
                             <th class="px-4 py-3.5"><input type="checkbox" @click="toggleSelectAll()" x-model="selectAll" class="rounded border-slate-300 text-amber-600 focus:ring-amber-600"></th>
                             <th class="px-4 py-3.5">Image</th>
                             <th class="px-4 py-3.5">Order No</th>
+                            <th class="px-4 py-3.5">Ref No</th>
                             <th class="px-4 py-3.5">Product / Design</th>
                             <th class="px-4 py-3.5">Specifications</th>
                             <th class="px-4 py-3.5">Purity & Target</th>
@@ -382,7 +383,8 @@
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <span class="font-bold text-slate-900 block">{{ $order->reference_no }}</span>
+                                <span class="font-bold text-slate-900 block">{{ $order->Work_order_no }}</span>
+                                <div class="font-medium text-slate-800">{{ $order->work_order_no }}</div>
                                 @if($order->work_order_no)
                                 <!-- <span class="text-[11px] text-slate-400 block">{{ $order->work_order_no }}</span> -->
                                 @endif
@@ -401,6 +403,9 @@
                                     <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $st['dot'] }}"></span>
                                     <span>{{ $st['label'] }}@if($order->status === 'returned' && $order->return_count) (x{{ $order->return_count }})@endif</span>
                                 </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-slate-800">{{ $order->reference_no }}</div>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-slate-800">{{ $order->product_name }}</div>
@@ -510,13 +515,20 @@
                             <span class="text-xs font-bold text-slate-800" x-text="ordersList[currentIndex].length"></span>
                         </div>
                     </template> -->
+                    <template x-if="ordersList[currentIndex]?.work_order_no">
+                        <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold">Order No</span>
+                            <span class="text-xs font-bold text-slate-800 break-words" x-text="ordersList[currentIndex].work_order_no"></span>
+                        </div>
+                    </template>
 
                     <template x-if="ordersList[currentIndex]?.reference_no">
                         <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                            <span class="text-[10px] text-slate-400 block uppercase font-bold">Order No</span>
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold">Ref No</span>
                             <span class="text-xs font-bold text-slate-800 break-words" x-text="ordersList[currentIndex].reference_no"></span>
                         </div>
                     </template>
+                    
 
                     <template x-if="ordersList[currentIndex]?.due_date">
                         <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">

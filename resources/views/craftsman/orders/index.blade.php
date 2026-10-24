@@ -16,7 +16,7 @@
         <a href="{{ route('craftsman.orders.index') }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap {{ is_null($currentStatus) ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">All Assigned</a>
         <a href="{{ route('craftsman.orders.index', ['status' => 'allocated']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap {{ $currentStatus == 'allocated' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">Allocated</a>
         <a href="{{ route('craftsman.orders.index', ['status' => 'in_progress']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap {{ $currentStatus == 'in_progress' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">In Progress</a>
-        <a href="{{ route('craftsman.orders.index', ['status' => 'completed']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap {{ $currentStatus == 'completed' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">Completed</a>
+        <!-- <a href="{{ route('craftsman.orders.index', ['status' => 'completed']) }}" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap {{ $currentStatus == 'completed' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' }}">Completed</a> -->
     </div>
 
     @php

@@ -24,7 +24,7 @@
                     </div>
                     <div>
                         <div class="text-3xl font-extrabold text-slate-800 tracking-tight">{{ $counts['today_in_process'] }}</div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1 block">In Process</span>
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1 block">Order Pending</span>
                     </div>
                 </div>
             </div>
@@ -32,15 +32,15 @@
             <!-- Today Completed -->
             <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 relative overflow-hidden group">
                 <!-- Subtle background decoration -->
-                <div class="absolute -right-4 -top-4 w-24 h-24 bg-emerald-50 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
+                <div class="absolute -right-4 -top-4 w-24 h-24 bg-rose-50 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
 
                 <div class="relative z-10 flex flex-col justify-between h-full">
-                    <div class="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-emerald-600/20">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <div class="w-12 h-12 rounded-xl bg-rose-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-rose-600/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <div class="text-3xl font-extrabold text-slate-800 tracking-tight">{{ $counts['today_completed'] }}</div>
-                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1 block">Completed</span>
+                        <div class="text-3xl font-extrabold text-slate-800 tracking-tight">{{ $counts['overall_overdue'] }}</div>
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1 block">Overdue</span>
                     </div>
                 </div>
             </div>
@@ -97,17 +97,17 @@
                 </div>
             </a>
 
-            <!-- Overdue Orders -->
-            <div class="col-span-2 sm:col-span-1 bg-white p-5 rounded-2xl border border-orange-100 shadow-sm flex flex-col justify-between bg-orange-50/30">
+            <!-- Completed Orders -->
+            <div class="col-span-2 sm:col-span-1 bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex flex-col justify-between bg-emerald-50/30">
                 <div class="flex items-start justify-between mb-4">
-                    <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     </div>
-                    <span class="text-2xl font-bold text-orange-600">{{ $counts['overall_overdue'] }}</span>
+                    <span class="text-2xl font-bold text-emerald-600">{{ $counts['overall_completed'] }}</span>
                 </div>
                 <div>
-                    <span class="text-xs font-bold text-orange-800 block">Overdue Orders</span>
-                    <span class="text-[10px] text-orange-600 font-medium mt-1 block">Needs Immediate Attention</span>
+                    <span class="text-xs font-bold text-emerald-800 block">Completed Orders</span>
+                    <span class="text-[10px] text-emerald-600 font-medium mt-1 block">Successfully fulfilled</span>
                 </div>
             </div>
 

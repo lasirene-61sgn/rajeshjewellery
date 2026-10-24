@@ -68,38 +68,65 @@
             <!-- Details Column -->
             <div class="w-full lg:w-2/3 flex flex-col justify-between space-y-5">
                 <div class="space-y-3">
+                    @if($workOrder->design_code)
                     <div class="flex justify-between items-center border-b border-stone-100 pb-3">
                         <span class="text-xs font-bold text-stone-400 uppercase tracking-wider">Design Code</span>
                         <span class="text-sm sm:text-base font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 font-mono">{{ $workOrder->design_code }}</span>
                     </div>
+                    @endif
+                    @if($workOrder->product_name)
                     <div class="flex justify-between items-center border-b border-stone-100 pb-3">
                         <span class="text-xs font-bold text-stone-400 uppercase tracking-wider">Product Name</span>
                         <span class="text-xs sm:text-sm font-extrabold text-stone-800 text-right">{{ $workOrder->product_name ?? 'N/A' }}</span>
                     </div>
+                    @endif
                 </div>
 
                 <!-- Stats Grid Cards -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
+                    @if($workOrder->work_order_no)
+                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
+                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Order No</span>
+                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->work_order_no }}</span>
+                    </div>
+                    @endif
+                    @if($workOrder->reference_no)
+                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
+                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Ref No</span>
+                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->reference_no }}</span>
+                    </div>
+                    @endif
+                    @if($workOrder->target_weight)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
                         <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Weight</span>
                         <span class="text-xs sm:text-sm font-black text-amber-700 mt-0.5 block">{{ number_format($workOrder->target_weight, 3) }}g</span>
                     </div>
+                    @endif
+                    @if($workOrder->quantity)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
                         <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Quantity</span>
                         <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->quantity }} {{ $workOrder->unit_type }}</span>
                     </div>
+                    @endif
+                    @if($workOrder->size)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
                         <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Size</span>
                         <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->size ?? 'N/A' }}</span>
                     </div>
+                    @endif
+                    @if($workOrder->length)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
                         <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Length</span>
                         <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->length ?? 'N/A' }}</span>
                     </div>
+                    @endif
+                    @if($workOrder->due_date)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
                         <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Due Date</span>
                         <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->due_date ? \Carbon\Carbon::parse($workOrder->due_date)->format('d M Y') : '-' }}</span>
                     </div>
+                    @endif
+                     
                 </div>
             </div>
         </div>

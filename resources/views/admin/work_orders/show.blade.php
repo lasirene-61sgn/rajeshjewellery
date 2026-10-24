@@ -72,10 +72,10 @@
                 <p class="text-sm font-medium text-slate-800">{{ $workOrder->screw_type ?? 'None / N/A' }}</p>
             </div>
 
-            <div>
+            <!-- <div>
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Rhodium Polish</span>
                 <p class="text-sm font-medium text-slate-800">{{ $workOrder->rhodium_polish ? 'Yes' : 'No' }}</p>
-            </div>
+            </div> -->
 
             <div>
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Size & Length</span>

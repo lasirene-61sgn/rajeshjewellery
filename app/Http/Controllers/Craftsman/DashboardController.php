@@ -30,6 +30,7 @@ class DashboardController extends Controller
             // Overall Stats
             'overall_new'     => (clone $ordersQuery)->whereIn('status', ['pending', 'allocated'])->count(),
             'overall_rejected'=> (clone $ordersQuery)->where('status', 'returned')->count(),
+            'overall_completed' => (clone $ordersQuery)->where('status', 'for_approval')->count(),
             'overall_overdue' => (clone $ordersQuery)->where('status', '!=', 'completed')
                                 ->where(function ($q) use ($today) {
                                     $q->where(function ($sub) use ($today) {
@@ -44,7 +45,7 @@ class DashboardController extends Controller
 
         // Recent active orders for the dashboard widget
         $recentOrders = (clone $ordersQuery)
-            ->whereIn('status', ['allocated', 'in_process', 'returned'])
+            ->whereIn('status', ['allocated', 'in_process', 'returned', 'for_approval'])
             ->latest()
             ->take(5)
             ->get();
