@@ -2,17 +2,20 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\WorkOrdersExport;
 use App\Http\Controllers\Controller;
 use App\Models\Craftsman;
 use App\Models\DesignCode;
 use App\Models\WorkOrder;
-use App\Exports\WorkOrdersExport;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class WorkOrderController extends Controller
@@ -22,7 +25,7 @@ class WorkOrderController extends Controller
         $currentTab = $request->query('tab', 'all');
         $perPage = (int) $request->query('per_page', 15);
         $allowedPerPage = [10, 15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage, true)) {
+        if (! in_array($perPage, $allowedPerPage, true)) {
             $perPage = 15;
         }
 
@@ -33,17 +36,17 @@ class WorkOrderController extends Controller
             $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('work_order_no', 'like', "%{$search}%")
-                  ->orWhere('reference_no', 'like', "%{$search}%")
-                  ->orWhere('product_name', 'like', "%{$search}%")
-                  ->orWhere('design_code', 'like', "%{$search}%")
-                  ->orWhere('design_nickname', 'like', "%{$search}%")
-                  ->orWhere('seal', 'like', "%{$search}%")
-                  ->orWhereExists(function ($sub) use ($search) {
-                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                          ->from('design_codes')
-                          ->whereColumn('design_codes.code', 'work_orders.design_code')
-                          ->where('design_codes.nickname', 'like', "%{$search}%");
-                  });
+                    ->orWhere('reference_no', 'like', "%{$search}%")
+                    ->orWhere('product_name', 'like', "%{$search}%")
+                    ->orWhere('design_code', 'like', "%{$search}%")
+                    ->orWhere('design_nickname', 'like', "%{$search}%")
+                    ->orWhere('seal', 'like', "%{$search}%")
+                    ->orWhereExists(function ($sub) use ($search) {
+                        $sub->select(DB::raw(1))
+                            ->from('design_codes')
+                            ->whereColumn('design_codes.code', 'work_orders.design_code')
+                            ->where('design_codes.nickname', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -60,13 +63,13 @@ class WorkOrderController extends Controller
             $craftsmanId = $request->craftsman_id;
             $query->where(function ($q) use ($craftsmanId) {
                 $q->where('craftsman_id', $craftsmanId)
-                  ->orWhereExists(function ($sub) use ($craftsmanId) {
-                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                          ->from('design_codes')
-                          ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
-                          ->whereColumn('design_codes.code', 'work_orders.design_code')
-                          ->where('craftsman_design_code.craftsman_id', $craftsmanId);
-                  });
+                    ->orWhereExists(function ($sub) use ($craftsmanId) {
+                        $sub->select(DB::raw(1))
+                            ->from('design_codes')
+                            ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                            ->whereColumn('design_codes.code', 'work_orders.design_code')
+                            ->where('craftsman_design_code.craftsman_id', $craftsmanId);
+                    });
             });
         }
 
@@ -79,7 +82,7 @@ class WorkOrderController extends Controller
         }
 
         $selectedOrderTypes = $request->input('order_type');
-        if (!empty($selectedOrderTypes)) {
+        if (! empty($selectedOrderTypes)) {
             if (is_string($selectedOrderTypes)) {
                 $selectedOrderTypes = array_values(array_filter(array_map('trim', explode(',', $selectedOrderTypes))));
             } elseif (is_array($selectedOrderTypes)) {
@@ -87,7 +90,7 @@ class WorkOrderController extends Controller
             } else {
                 $selectedOrderTypes = [];
             }
-            if (!empty($selectedOrderTypes)) {
+            if (! empty($selectedOrderTypes)) {
                 $query->whereIn('order_type', $selectedOrderTypes);
             }
         } else {
@@ -98,12 +101,12 @@ class WorkOrderController extends Controller
             $nickFilter = trim($request->nickname);
             $query->where(function ($q) use ($nickFilter) {
                 $q->where('design_nickname', 'like', "%{$nickFilter}%")
-                  ->orWhereExists(function ($sub) use ($nickFilter) {
-                      $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                          ->from('design_codes')
-                          ->whereColumn('design_codes.code', 'work_orders.design_code')
-                          ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
-                  });
+                    ->orWhereExists(function ($sub) use ($nickFilter) {
+                        $sub->select(DB::raw(1))
+                            ->from('design_codes')
+                            ->whereColumn('design_codes.code', 'work_orders.design_code')
+                            ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                    });
             });
         }
 
@@ -121,35 +124,35 @@ class WorkOrderController extends Controller
 
         // 4. Tab Status Filtering
         match ($currentTab) {
-            'pending'      => $query->where('status', 'pending'),
-            'allocated'    => $query->where('status', 'allocated'),
-            'in_process'   => $query->where('status', 'in_process'),
-            'returned'     => $query->where('status', 'returned'),
+            'pending' => $query->where('status', 'pending'),
+            'allocated' => $query->where('status', 'allocated'),
+            'in_process' => $query->where('status', 'in_process'),
+            'returned' => $query->where('status', 'returned'),
             'for_approval' => $query->where('status', 'for_approval'),
-            'completed'    => $query->where('status', 'completed'),
-            'overdue'      => $query->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today()),
-            default        => null,
+            'completed' => $query->where('status', 'completed'),
+            'overdue' => $query->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today()),
+            default => null,
         };
 
         // Tab Badges Counts
         $counts = [
-            'all'          => (clone $baseQuery)->count(),
-            'pending'      => (clone $baseQuery)->where('status', 'pending')->count(),
-            'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
-            'in_process'   => (clone $baseQuery)->where('status', 'in_process')->count(),
-            'returned'     => (clone $baseQuery)->where('status', 'returned')->count(),
+            'all' => (clone $baseQuery)->count(),
+            'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
+            'allocated' => (clone $baseQuery)->where('status', 'allocated')->count(),
+            'in_process' => (clone $baseQuery)->where('status', 'in_process')->count(),
+            'returned' => (clone $baseQuery)->where('status', 'returned')->count(),
             'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
-            'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
-            'overdue'      => (clone $baseQuery)->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today())->count(),
+            'completed' => (clone $baseQuery)->where('status', 'completed')->count(),
+            'overdue' => (clone $baseQuery)->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today())->count(),
         ];
 
-        $categories    = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->sort()->values();
+        $categories = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->sort()->values();
         $subcategories = WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->pluck('subcategory')->sort()->values();
-        $nicknames     = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
-        $orderTypes    = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type')->sort()->values();
-        $craftsmen     = Craftsman::orderBy('name')->get();
-        $designCodes   = DesignCode::with('craftsmen')->orderBy('code')->get();
-        $productNames  = WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->pluck('product_name')->sort()->values();
+        $nicknames = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
+        $orderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type')->sort()->values();
+        $craftsmen = Craftsman::orderBy('name')->get();
+        $designCodes = DesignCode::with('craftsmen')->orderBy('code')->get();
+        $productNames = WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->pluck('product_name')->sort()->values();
 
         $workOrders = $query->paginate($perPage)->withQueryString();
 
@@ -175,88 +178,89 @@ class WorkOrderController extends Controller
     public function create(): View
     {
         $designCodes = DesignCode::orderBy('code')->get();
+
         return view('admin.work_orders.create', compact('designCodes'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'reference_no'    => ['nullable', 'string', 'max:100'],
-            'product_name'    => ['required', 'string', 'max:255'],
-            'design_code'     => ['required', 'string', 'max:50'],
+            'reference_no' => ['nullable', 'string', 'max:100'],
+            'product_name' => ['required', 'string', 'max:255'],
+            'design_code' => ['required', 'string', 'max:50'],
             'design_nickname' => ['nullable', 'string', 'max:255'],
-            'unit_type'       => ['required', 'string'],
-            'quantity'        => ['required', 'integer', 'min:1'],
-            'screw_type'      => ['nullable', 'string'],
-            'category'        => ['nullable', 'string', 'max:100'],
-            'subcategory'     => ['nullable', 'string', 'max:100'],
-            'size'            => ['nullable', 'string', 'max:50'],
-            'length'          => ['nullable', 'string', 'max:50'],
-            'rhodium_polish'  => ['nullable', 'boolean'],
+            'unit_type' => ['required', 'string'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'screw_type' => ['nullable', 'string'],
+            'category' => ['nullable', 'string', 'max:100'],
+            'subcategory' => ['nullable', 'string', 'max:100'],
+            'size' => ['nullable', 'string', 'max:50'],
+            'length' => ['nullable', 'string', 'max:50'],
+            'rhodium_polish' => ['nullable', 'boolean'],
             'hallmark_purity' => ['required', 'string'],
-            'seal'            => ['nullable', 'string', 'max:50'],
-            'target_weight'   => ['required', 'numeric', 'min:0.001'],
-            'due_date'        => ['required', 'date'],
-            'job_type'        => ['nullable', 'string'],
-            'instructions'    => ['nullable', 'string'],
-            'design_image'    => ['nullable', 'image', 'max:4096'],
-            'order_type'      => ['nullable', 'string'],
+            'seal' => ['nullable', 'string', 'max:50'],
+            'target_weight' => ['required', 'numeric', 'min:0.001'],
+            'due_date' => ['required', 'date'],
+            'job_type' => ['nullable', 'string'],
+            'instructions' => ['nullable', 'string'],
+            'design_image' => ['nullable', 'image', 'max:4096'],
+            'order_type' => ['nullable', 'string'],
         ]);
 
         if ($request->hasFile('design_image')) {
             $file = $request->file('design_image');
-            $filename = 'work_orders/' . uniqid() . '.' . $file->getClientOriginalExtension();
-            
-            $referenceNo = $validated['reference_no'] ?? '';
-            $sealValue   = $validated['seal'] ?? '';
+            $filename = 'work_orders/'.uniqid().'.'.$file->getClientOriginalExtension();
 
-            if (stripos($referenceNo, 'ESO') !== false || !empty($sealValue)) {
+            $referenceNo = $validated['reference_no'] ?? '';
+            $sealValue = $validated['seal'] ?? '';
+
+            if (stripos($referenceNo, 'ESO') !== false || ! empty($sealValue)) {
                 $filePath = $file->getRealPath();
                 $info = @getimagesize($filePath);
                 $mime = $info['mime'] ?? 'image/jpeg';
 
-                $img = match($mime) {
-                    'image/png'  => @imagecreatefrompng($filePath),
+                $img = match ($mime) {
+                    'image/png' => @imagecreatefrompng($filePath),
                     'image/webp' => @imagecreatefromwebp($filePath),
-                    default      => @imagecreatefromjpeg($filePath)
+                    default => @imagecreatefromjpeg($filePath)
                 };
 
                 if ($img) {
                     $x = 30;
                     $y = 30;
                     $text = ' 916 SEAL ';
-                    
-                    $scale = 3; 
-                    
+
+                    $scale = 3;
+
                     $font = 5;
                     $fontWidth = imagefontwidth($font);
                     $fontHeight = imagefontheight($font);
-                    
+
                     $textW = strlen($text) * $fontWidth;
                     $textH = $fontHeight;
-                    
+
                     $scaledW = $textW * $scale;
                     $scaledH = $textH * $scale;
-                    
+
                     $smallImg = imagecreatetruecolor($textW, $textH);
                     $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
                     $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
-                    
+
                     imagefill($smallImg, 0, 0, $bgColorSmall);
                     imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
-                    
+
                     $padding = 10;
-                    $bgColor = imagecolorallocate($img, 245, 158, 11); 
+                    $bgColor = imagecolorallocate($img, 245, 158, 11);
                     imagefilledrectangle($img, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
-                    
+
                     imagecopyresampled($img, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
                     imagedestroy($smallImg);
 
                     ob_start();
-                    match($mime) {
-                        'image/png'  => imagepng($img),
+                    match ($mime) {
+                        'image/png' => imagepng($img),
                         'image/webp' => imagewebp($img),
-                        default      => imagejpeg($img, null, 90)
+                        default => imagejpeg($img, null, 90)
                     };
                     $imageData = ob_get_clean();
                     imagedestroy($img);
@@ -274,12 +278,12 @@ class WorkOrderController extends Controller
         $year = date('Y');
         $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
         $nextNumber = $lastOrder ? ((int) substr($lastOrder->work_order_no, -4)) + 1 : 1;
-        $validated['work_order_no'] = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
-        
+        $validated['work_order_no'] = 'WO-'.$year.'-'.str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+
         $validated['status'] = 'pending';
 
         // Auto-assign craftsman if design code is already linked to one
-        if (!empty($validated['design_code'])) {
+        if (! empty($validated['design_code'])) {
             $designCodeStr = trim($validated['design_code']);
             $designCodeModel = DesignCode::with('craftsmen')->where('code', $designCodeStr)->first();
 
@@ -299,6 +303,7 @@ class WorkOrderController extends Controller
         WorkOrder::create($validated);
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
+
         return redirect($backUrl)->with('success', 'Work order created successfully and auto-allocated if mapped.');
     }
 
@@ -321,26 +326,26 @@ class WorkOrderController extends Controller
     public function update(Request $request, WorkOrder $workOrder): RedirectResponse
     {
         $validated = $request->validate([
-            'reference_no'    => ['nullable', 'string', 'max:100'],
-            'product_name'    => ['required', 'string', 'max:255'],
-            'design_code'     => ['required', 'string', 'max:50'],
+            'reference_no' => ['nullable', 'string', 'max:100'],
+            'product_name' => ['required', 'string', 'max:255'],
+            'design_code' => ['required', 'string', 'max:50'],
             'design_nickname' => ['nullable', 'string', 'max:255'],
-            'unit_type'       => ['required', 'string'],
-            'quantity'        => ['required', 'integer', 'min:1'],
-            'screw_type'      => ['nullable', 'string'],
-            'category'        => ['nullable', 'string', 'max:100'],
-            'subcategory'     => ['nullable', 'string', 'max:100'],
-            'size'            => ['nullable', 'string', 'max:50'],
-            'length'          => ['nullable', 'string', 'max:50'],
-            'rhodium_polish'  => ['nullable', 'boolean'],
+            'unit_type' => ['required', 'string'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'screw_type' => ['nullable', 'string'],
+            'category' => ['nullable', 'string', 'max:100'],
+            'subcategory' => ['nullable', 'string', 'max:100'],
+            'size' => ['nullable', 'string', 'max:50'],
+            'length' => ['nullable', 'string', 'max:50'],
+            'rhodium_polish' => ['nullable', 'boolean'],
             'hallmark_purity' => ['required', 'string'],
-            'seal'            => ['nullable', 'string', 'max:50'],
-            'target_weight'   => ['required', 'numeric', 'min:0.001'],
-            'due_date'        => ['required', 'date'],
-            'job_type'        => ['nullable', 'string', 'max:100'],
-            'instructions'    => ['nullable', 'string'],
-            'design_image'    => ['nullable', 'image', 'max:4096'],
-            'order_type'      => ['nullable', 'string'],
+            'seal' => ['nullable', 'string', 'max:50'],
+            'target_weight' => ['required', 'numeric', 'min:0.001'],
+            'due_date' => ['required', 'date'],
+            'job_type' => ['nullable', 'string', 'max:100'],
+            'instructions' => ['nullable', 'string'],
+            'design_image' => ['nullable', 'image', 'max:4096'],
+            'order_type' => ['nullable', 'string'],
         ]);
 
         if ($request->hasFile('design_image')) {
@@ -349,58 +354,58 @@ class WorkOrderController extends Controller
             }
 
             $file = $request->file('design_image');
-            $filename = 'work_orders/' . uniqid() . '.' . $file->getClientOriginalExtension();
-            
-            $referenceNo = $validated['reference_no'] ?? '';
-            $sealValue   = $validated['seal'] ?? '';
+            $filename = 'work_orders/'.uniqid().'.'.$file->getClientOriginalExtension();
 
-            if (stripos($referenceNo, 'ESO') !== false || !empty($sealValue)) {
+            $referenceNo = $validated['reference_no'] ?? '';
+            $sealValue = $validated['seal'] ?? '';
+
+            if (stripos($referenceNo, 'ESO') !== false || ! empty($sealValue)) {
                 $filePath = $file->getRealPath();
                 $info = @getimagesize($filePath);
                 $mime = $info['mime'] ?? 'image/jpeg';
 
-                $img = match($mime) {
-                    'image/png'  => @imagecreatefrompng($filePath),
+                $img = match ($mime) {
+                    'image/png' => @imagecreatefrompng($filePath),
                     'image/webp' => @imagecreatefromwebp($filePath),
-                    default      => @imagecreatefromjpeg($filePath)
+                    default => @imagecreatefromjpeg($filePath)
                 };
 
                 if ($img) {
                     $x = 30;
                     $y = 30;
                     $text = ' 916 SEAL ';
-                    
-                    $scale = 3; 
-                    
+
+                    $scale = 3;
+
                     $font = 5;
                     $fontWidth = imagefontwidth($font);
                     $fontHeight = imagefontheight($font);
-                    
+
                     $textW = strlen($text) * $fontWidth;
                     $textH = $fontHeight;
-                    
+
                     $scaledW = $textW * $scale;
                     $scaledH = $textH * $scale;
-                    
+
                     $smallImg = imagecreatetruecolor($textW, $textH);
                     $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
                     $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
-                    
+
                     imagefill($smallImg, 0, 0, $bgColorSmall);
                     imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
-                    
+
                     $padding = 10;
-                    $bgColor = imagecolorallocate($img, 245, 158, 11); 
+                    $bgColor = imagecolorallocate($img, 245, 158, 11);
                     imagefilledrectangle($img, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
-                    
+
                     imagecopyresampled($img, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
                     imagedestroy($smallImg);
 
                     ob_start();
-                    match($mime) {
-                        'image/png'  => imagepng($img),
+                    match ($mime) {
+                        'image/png' => imagepng($img),
                         'image/webp' => imagewebp($img),
-                        default      => imagejpeg($img, null, 90)
+                        default => imagejpeg($img, null, 90)
                     };
                     $imageData = ob_get_clean();
                     imagedestroy($img);
@@ -417,7 +422,7 @@ class WorkOrderController extends Controller
 
         $validated['rhodium_polish'] = $request->boolean('rhodium_polish');
 
-        if (!empty($validated['design_code'])) {
+        if (! empty($validated['design_code'])) {
             $designCodeStr = trim($validated['design_code']);
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
 
@@ -434,6 +439,7 @@ class WorkOrderController extends Controller
         $workOrder->update($validated);
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
+
         return redirect($backUrl)->with('success', 'Work order updated successfully.');
     }
 
@@ -451,7 +457,7 @@ class WorkOrderController extends Controller
 
         $workOrder->update([
             'craftsman_id' => $request->craftsman_id,
-            'status'       => $status,
+            'status' => $status,
             'allocated_at' => Carbon::now(),
         ]);
 
@@ -461,10 +467,10 @@ class WorkOrderController extends Controller
     public function bulkAllocate(Request $request): RedirectResponse
     {
         $request->validate([
-            'order_ids'    => ['required', 'array'],
-            'order_ids.*'  => ['exists:work_orders,id'],
+            'order_ids' => ['required', 'array'],
+            'order_ids.*' => ['exists:work_orders,id'],
             'craftsman_id' => ['required', 'exists:craftsmen,id'],
-            'due_date'     => ['nullable', 'date'],
+            'due_date' => ['nullable', 'date'],
         ]);
 
         $orders = WorkOrder::whereIn('id', $request->order_ids)->get();
@@ -478,7 +484,7 @@ class WorkOrderController extends Controller
 
             $updateData = [
                 'craftsman_id' => $request->craftsman_id,
-                'status'       => $status,
+                'status' => $status,
                 'allocated_at' => Carbon::now(),
             ];
 
@@ -489,7 +495,7 @@ class WorkOrderController extends Controller
             $workOrder->update($updateData);
         }
 
-        return back()->with('success', count($request->order_ids) . ' work orders successfully allocated.');
+        return back()->with('success', count($request->order_ids).' work orders successfully allocated.');
     }
 
     public function undoAllocation(WorkOrder $workOrder): RedirectResponse
@@ -500,7 +506,7 @@ class WorkOrderController extends Controller
 
         $workOrder->update([
             'craftsman_id' => null,
-            'status'       => 'pending',
+            'status' => 'pending',
             'allocated_at' => null,
         ]);
 
@@ -511,15 +517,15 @@ class WorkOrderController extends Controller
     {
         $request->validate([
             'return_due_date' => ['required', 'date', 'after_or_equal:today'],
-            'return_reason'   => ['required', 'string'],
-            'return_image'    => ['nullable', 'image', 'max:4096'],
+            'return_reason' => ['required', 'string'],
+            'return_image' => ['nullable', 'image', 'max:4096'],
         ]);
 
         $data = [
-            'status'          => 'returned',
+            'status' => 'returned',
             'return_due_date' => $request->return_due_date,
-            'return_reason'   => $request->return_reason,
-            'return_count'    => ($workOrder->return_count ?? 0) + 1,
+            'return_reason' => $request->return_reason,
+            'return_count' => ($workOrder->return_count ?? 0) + 1,
         ];
 
         if ($request->hasFile('return_image')) {
@@ -534,8 +540,8 @@ class WorkOrderController extends Controller
     public function approve(WorkOrder $workOrder): RedirectResponse
     {
         $workOrder->update([
-            'status'       => 'completed',
-            'approved_at'  => Carbon::now(),
+            'status' => 'completed',
+            'approved_at' => Carbon::now(),
         ]);
 
         return back()->with('success', "Order {$workOrder->work_order_no} approved and marked completed.");
@@ -545,28 +551,29 @@ class WorkOrderController extends Controller
     {
         $request->validate([
             'order_ids' => ['required', 'array'],
-            'order_ids.*' => ['exists:work_orders,id']
+            'order_ids.*' => ['exists:work_orders,id'],
         ]);
 
         WorkOrder::whereIn('id', $request->order_ids)->update([
-            'status'       => 'completed',
-            'approved_at'  => Carbon::now(),
+            'status' => 'completed',
+            'approved_at' => Carbon::now(),
         ]);
 
-        return back()->with('success', count($request->order_ids) . ' work orders marked as completed.');
+        return back()->with('success', count($request->order_ids).' work orders marked as completed.');
     }
 
     public function print(WorkOrder $workOrder): View
     {
         $workOrder->load('craftsman');
         $workOrders = collect([$workOrder]);
+
         return view('admin.work_orders.print', compact('workOrders', 'workOrder'));
     }
 
     public function bulkPrint(Request $request): View
     {
         $request->validate([
-            'order_ids'   => ['required', 'array'],
+            'order_ids' => ['required', 'array'],
             'order_ids.*' => ['exists:work_orders,id'],
         ]);
 
@@ -578,7 +585,7 @@ class WorkOrderController extends Controller
     public function export(Request $request): BinaryFileResponse|RedirectResponse
     {
         // 1. If specific order IDs are selected (checkbox selection)
-        if ($request->has('order_ids') && !empty($request->order_ids)) {
+        if ($request->has('order_ids') && ! empty($request->order_ids)) {
             $orderIds = is_array($request->order_ids) ? $request->order_ids : explode(',', (string) $request->order_ids);
             $orderIds = array_filter(array_map('trim', $orderIds));
 
@@ -587,7 +594,7 @@ class WorkOrderController extends Controller
                 ->orderBy('id', 'desc')
                 ->get();
 
-            $fileName = 'work_orders_selected_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
+            $fileName = 'work_orders_selected_'.Carbon::now()->format('Y-m-d_His').'.xlsx';
         } else {
             // 2. Otherwise apply tab and filter toolbar parameters
             $currentTab = $request->input('tab', 'all');
@@ -597,17 +604,17 @@ class WorkOrderController extends Controller
                 $search = trim($request->search);
                 $query->where(function ($q) use ($search) {
                     $q->where('work_order_no', 'like', "%{$search}%")
-                      ->orWhere('reference_no', 'like', "%{$search}%")
-                      ->orWhere('product_name', 'like', "%{$search}%")
-                      ->orWhere('design_code', 'like', "%{$search}%")
-                      ->orWhere('design_nickname', 'like', "%{$search}%")
-                      ->orWhere('seal', 'like', "%{$search}%")
-                      ->orWhereExists(function ($sub) use ($search) {
-                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                              ->from('design_codes')
-                              ->whereColumn('design_codes.code', 'work_orders.design_code')
-                              ->where('design_codes.nickname', 'like', "%{$search}%");
-                      });
+                        ->orWhere('reference_no', 'like', "%{$search}%")
+                        ->orWhere('product_name', 'like', "%{$search}%")
+                        ->orWhere('design_code', 'like', "%{$search}%")
+                        ->orWhere('design_nickname', 'like', "%{$search}%")
+                        ->orWhere('seal', 'like', "%{$search}%")
+                        ->orWhereExists(function ($sub) use ($search) {
+                            $sub->select(DB::raw(1))
+                                ->from('design_codes')
+                                ->whereColumn('design_codes.code', 'work_orders.design_code')
+                                ->where('design_codes.nickname', 'like', "%{$search}%");
+                        });
                 });
             }
 
@@ -623,13 +630,13 @@ class WorkOrderController extends Controller
                 $craftsmanId = $request->craftsman_id;
                 $query->where(function ($q) use ($craftsmanId) {
                     $q->where('craftsman_id', $craftsmanId)
-                      ->orWhereExists(function ($sub) use ($craftsmanId) {
-                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                              ->from('design_codes')
-                              ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
-                              ->whereColumn('design_codes.code', 'work_orders.design_code')
-                              ->where('craftsman_design_code.craftsman_id', $craftsmanId);
-                      });
+                        ->orWhereExists(function ($sub) use ($craftsmanId) {
+                            $sub->select(DB::raw(1))
+                                ->from('design_codes')
+                                ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                                ->whereColumn('design_codes.code', 'work_orders.design_code')
+                                ->where('craftsman_design_code.craftsman_id', $craftsmanId);
+                        });
                 });
             }
 
@@ -642,7 +649,7 @@ class WorkOrderController extends Controller
             }
 
             $selectedOrderTypes = $request->input('order_type');
-            if (!empty($selectedOrderTypes)) {
+            if (! empty($selectedOrderTypes)) {
                 if (is_string($selectedOrderTypes)) {
                     $selectedOrderTypes = array_values(array_filter(array_map('trim', explode(',', $selectedOrderTypes))));
                 } elseif (is_array($selectedOrderTypes)) {
@@ -650,7 +657,7 @@ class WorkOrderController extends Controller
                 } else {
                     $selectedOrderTypes = [];
                 }
-                if (!empty($selectedOrderTypes)) {
+                if (! empty($selectedOrderTypes)) {
                     $query->whereIn('order_type', $selectedOrderTypes);
                 }
             }
@@ -659,12 +666,12 @@ class WorkOrderController extends Controller
                 $nickFilter = trim($request->nickname);
                 $query->where(function ($q) use ($nickFilter) {
                     $q->where('design_nickname', 'like', "%{$nickFilter}%")
-                      ->orWhereExists(function ($sub) use ($nickFilter) {
-                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                              ->from('design_codes')
-                              ->whereColumn('design_codes.code', 'work_orders.design_code')
-                              ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
-                      });
+                        ->orWhereExists(function ($sub) use ($nickFilter) {
+                            $sub->select(DB::raw(1))
+                                ->from('design_codes')
+                                ->whereColumn('design_codes.code', 'work_orders.design_code')
+                                ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                        });
                 });
             }
 
@@ -677,18 +684,18 @@ class WorkOrderController extends Controller
             }
 
             match ($currentTab) {
-                'pending'      => $query->where('status', 'pending'),
-                'allocated'    => $query->where('status', 'allocated'),
-                'in_process'   => $query->where('status', 'in_process'),
-                'returned'     => $query->where('status', 'returned'),
+                'pending' => $query->where('status', 'pending'),
+                'allocated' => $query->where('status', 'allocated'),
+                'in_process' => $query->where('status', 'in_process'),
+                'returned' => $query->where('status', 'returned'),
                 'for_approval' => $query->where('status', 'for_approval'),
-                'completed'    => $query->where('status', 'completed'),
-                'overdue'      => $query->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today()),
-                default        => null,
+                'completed' => $query->where('status', 'completed'),
+                'overdue' => $query->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today()),
+                default => null,
             };
 
             $orders = $query->get();
-            $fileName = 'work_orders_' . $currentTab . '_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
+            $fileName = 'work_orders_'.$currentTab.'_'.Carbon::now()->format('Y-m-d_His').'.xlsx';
         }
 
         if ($orders->isEmpty()) {
@@ -701,12 +708,14 @@ class WorkOrderController extends Controller
     public function destroy(WorkOrder $workOrder): RedirectResponse
     {
         $workOrder->delete();
+
         return redirect()->route('admin.work_orders.index')->with('success', 'Work order deleted.');
     }
 
     public function importForm(): View
     {
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
+
         return view('admin.work_orders.import', compact('backUrl'));
     }
 
@@ -732,11 +741,11 @@ class WorkOrderController extends Controller
                 $header = fgetcsv($handle, 1000, $delimiter);
 
                 $normalizedHeader = $header ? array_map(function ($h) {
-                    return strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', (string)$h)));
+                    return strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', (string) $h)));
                 }, $header) : [];
 
                 while (($row = fgetcsv($handle, 1000, $delimiter)) !== false) {
-                    if (!empty($normalizedHeader) && count($normalizedHeader) === count($row)) {
+                    if (! empty($normalizedHeader) && count($normalizedHeader) === count($row)) {
                         $rows[] = array_combine($normalizedHeader, $row);
                     }
                 }
@@ -744,41 +753,41 @@ class WorkOrderController extends Controller
             }
         } else {
             // Excel files
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $spreadsheet = IOFactory::load($path);
             $worksheet = $spreadsheet->getActiveSheet();
-            
+
             // Format data so dates appear as text instead of floats
             $data = $worksheet->toArray(null, true, true, false);
-            
+
             if (count($data) > 0) {
                 $header = array_shift($data);
-                
+
                 $validIndices = [];
                 $normalizedHeader = [];
                 foreach ($header as $index => $h) {
-                    if ($h !== null && trim((string)$h) !== '') {
+                    if ($h !== null && trim((string) $h) !== '') {
                         $validIndices[] = $index;
-                        $normalizedHeader[] = strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', (string)$h)));
+                        $normalizedHeader[] = strtolower(trim(preg_replace('/[\x00-\x1F\x7F-\x9F\xEF\xBB\xBF]/u', '', (string) $h)));
                     }
                 }
 
                 foreach ($data as $row) {
                     $isEmptyRow = true;
                     foreach ($row as $cell) {
-                        if ($cell !== null && trim((string)$cell) !== '') {
+                        if ($cell !== null && trim((string) $cell) !== '') {
                             $isEmptyRow = false;
                             break;
                         }
                     }
                     if ($isEmptyRow) {
-                        continue; 
+                        continue;
                     }
 
                     $filteredRow = [];
                     foreach ($validIndices as $index) {
                         $filteredRow[] = $row[$index] ?? null;
                     }
-                    
+
                     if (count($normalizedHeader) === count($filteredRow)) {
                         $rows[] = array_combine($normalizedHeader, $filteredRow);
                     }
@@ -798,13 +807,15 @@ class WorkOrderController extends Controller
             // Check if it's an Excel numeric date serial
             if (is_numeric($trimmed) && (float) $trimmed > 25000 && (float) $trimmed < 65000) {
                 try {
-                    return Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $trimmed));
-                } catch (\Throwable $e) {}
+                    return Carbon::instance(Date::excelToDateTimeObject((float) $trimmed));
+                } catch (\Throwable $e) {
+                }
             }
             foreach (['d/m/Y', 'd-m-Y', 'Y-m-d', 'd.m.Y', 'm/d/Y', 'd/m/y', 'd-m-y', 'd/m/Y H:i', 'd-m-Y H:i', 'Y-m-d H:i:s', 'd/m/Y H:i:s'] as $format) {
                 try {
                     return Carbon::createFromFormat($format, $trimmed);
-                } catch (\Throwable $e) {}
+                } catch (\Throwable $e) {
+                }
             }
             try {
                 return Carbon::parse($trimmed);
@@ -819,33 +830,36 @@ class WorkOrderController extends Controller
                     $lowerKey = strtolower(trim($key));
                     if (array_key_exists($lowerKey, $cleanRow)) {
                         $val = trim($cleanRow[$lowerKey]);
+
                         return $val !== '' ? $val : null;
                     }
                 }
+
                 return null;
             };
 
-            $referenceNo  = $getVal(['order no', 'orderno', 'ref no', 'reference no']);
+            $referenceNo = $getVal(['order no', 'orderno', 'ref no', 'reference no']);
 
-            if (!empty($referenceNo) && WorkOrder::where('reference_no', $referenceNo)->exists()) {
+            if (! empty($referenceNo) && WorkOrder::where('reference_no', $referenceNo)->exists()) {
                 $skippedCount++;
+
                 continue;
             }
 
-            $unitType        = $getVal(['unit', 'unit type', 'unit_type']) ?? 'pcs';
-            $orderDateStr    = $getVal(['order date', 'orderdate', 'date', 'order_date', 'created at', 'created_at']);
+            $unitType = $getVal(['unit', 'unit type', 'unit_type']) ?? 'pcs';
+            $orderDateStr = $getVal(['order date', 'orderdate', 'date', 'order_date', 'created at', 'created_at']);
             $expectedDateStr = $getVal(['expected date', 'expected_date', 'expecteddate', 'exp date', 'exp. date', 'exp_date', 'due date', 'due_date', 'duedate', 'expected delivery date', 'delivery date']);
-            $productName     = $getVal(['Product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
-            $designCode      = $getVal(['Design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
+            $productName = $getVal(['Product', 'product name', 'item', 'item name']) ?? 'Unknown Product';
+            $designCode = $getVal(['Design', 'design code', 'code', 'designcode']) ?? 'DEFAULT';
 
             $excelNickname = $getVal(['nickname', 'design nickname', 'design_nickname', 'alias']);
-            $seal          = $getVal(['seal', '916 seal', 'hallmark seal', 'seal type']) ?? (stripos($referenceNo ?? '', 'ESO') !== false ? '916' : null);
-            $weight        = $getVal(['Weight', 'target weight', 'wt']);
-            $size          = $getVal(['Size']);
-            $quantity      = $getVal(['Quantity', 'qty', 'pcs']);
-            $jobType       = $getVal(['balance', 'job type', 'jobtype']);
-            $instructions  = $getVal(['remarks', 'instruction', 'instructions', 'note']);
-            $orderType     = $getVal(['Order Type', 'order_type', 'ordertype']);
+            $seal = $getVal(['seal', '916 seal', 'hallmark seal', 'seal type']) ?? (stripos($referenceNo ?? '', 'ESO') !== false ? '916' : null);
+            $weight = $getVal(['Weight', 'target weight', 'wt']);
+            $size = $getVal(['Size']);
+            $quantity = $getVal(['Quantity', 'qty', 'pcs']);
+            $jobType = $getVal(['balance', 'job type', 'jobtype']);
+            $instructions = $getVal(['remarks', 'instruction', 'instructions', 'note']);
+            $orderType = $getVal(['Order Type', 'order_type', 'ordertype']);
 
             // Order Date becomes Created Date
             $parsedCreatedDate = $parseCustomDate($orderDateStr) ?? now();
@@ -862,13 +876,13 @@ class WorkOrderController extends Controller
 
             $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
             $nextNumber = $lastOrder ? ((int) substr(str_replace('_', '-', $lastOrder->work_order_no), -4)) + 1 : ($importedCount + 1);
-            $workOrderNo = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            $workOrderNo = 'WO-'.$year.'-'.str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
-            $designCodeStr = !empty($designCode) ? $designCode : 'DEFAULT';
+            $designCodeStr = ! empty($designCode) ? $designCode : 'DEFAULT';
 
             $existingDesign = DesignCode::where('code', $designCodeStr)->first();
 
-            if (!empty($excelNickname)) {
+            if (! empty($excelNickname)) {
                 $nickname = $excelNickname;
             } elseif ($existingDesign && $existingDesign->nickname && $existingDesign->nickname !== $existingDesign->code) {
                 $nickname = $existingDesign->nickname;
@@ -881,7 +895,7 @@ class WorkOrderController extends Controller
                 ['nickname' => $nickname]
             );
 
-            if (!empty($excelNickname) && $existingDesign) {
+            if (! empty($excelNickname) && $existingDesign) {
                 $existingDesign->update(['nickname' => $excelNickname]);
             }
 
@@ -898,27 +912,27 @@ class WorkOrderController extends Controller
             }
 
             $workOrder = WorkOrder::create([
-                'work_order_no'   => $workOrderNo,
-                'reference_no'    => $referenceNo,
-                'product_name'    => $productName,
-                'design_code'     => $designCodeStr,
+                'work_order_no' => $workOrderNo,
+                'reference_no' => $referenceNo,
+                'product_name' => $productName,
+                'design_code' => $designCodeStr,
                 'design_nickname' => $nickname,
-                'unit_type'       => $unitType,
-                'quantity'        => is_numeric($quantity) ? (int) $quantity : 1,
-                'category'        => null,
-                'size'            => $size,
+                'unit_type' => $unitType,
+                'quantity' => is_numeric($quantity) ? (int) $quantity : 1,
+                'category' => null,
+                'size' => $size,
                 'hallmark_purity' => null,
-                'seal'            => $seal,
-                'target_weight'   => is_numeric($weight) ? (float) $weight : 0.000,
-                'job_type'        => $jobType,
-                'instructions'    => $instructions,
-                'craftsman_id'    => $craftsmanId,
-                'status'          => $status,
-                'due_date'        => $dueDate,
-                'allocated_at'    => $craftsmanId ? Carbon::now() : null,
-                'created_at'      => $parsedCreatedDate,
-                'order_type'      => $orderType,
-                'design_image'    => $imagePath,
+                'seal' => $seal,
+                'target_weight' => is_numeric($weight) ? (float) $weight : 0.000,
+                'job_type' => $jobType,
+                'instructions' => $instructions,
+                'craftsman_id' => $craftsmanId,
+                'status' => $status,
+                'due_date' => $dueDate,
+                'allocated_at' => $craftsmanId ? Carbon::now() : null,
+                'created_at' => $parsedCreatedDate,
+                'order_type' => $orderType,
+                'design_image' => $imagePath,
             ]);
 
             if ($parsedCreatedDate && $workOrder->created_at != $parsedCreatedDate) {
@@ -930,6 +944,7 @@ class WorkOrderController extends Controller
         }
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
+
         return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders. ({$skippedCount} duplicates skipped).");
     }
 }

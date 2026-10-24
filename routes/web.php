@@ -1,19 +1,18 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
-// Admin Controllers
 use App\Http\Controllers\Admin\CraftsmanController as AdminCraftsmanController;
+// Admin Controllers
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
-use App\Http\Controllers\Admin\LoginController as AdminLoginController;
-use App\Http\Controllers\Admin\WorkOrderController as AdminWorkOrderController;
 use App\Http\Controllers\Admin\DesignCodeController as AdminDesignCodeController;
+use App\Http\Controllers\Admin\LoginController as AdminLoginController;
 use App\Http\Controllers\Admin\OrderController;
-// Craftsman Controllers
+use App\Http\Controllers\Admin\WorkOrderController as AdminWorkOrderController;
 use App\Http\Controllers\Craftsman\DashboardController as CraftsmanDashboardController;
+// Craftsman Controllers
 use App\Http\Controllers\Craftsman\LoginController as CraftsmanLoginController;
 use App\Http\Controllers\Craftsman\OrderController as CraftsmanOrderController;
 use App\Http\Controllers\Craftsman\WorkOrderController as CraftsmanWorkOrderController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
@@ -45,7 +44,7 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     // Custom static endpoints before dynamic or resource routes
     Route::get('design-codes/unassigned', [AdminDesignCodeController::class, 'unassigned'])->name('design_codes.unassigned');
     Route::resource('design-codes', AdminDesignCodeController::class)->except(['create', 'store', 'show'])->names('design_codes');
-    
+
     // Import Routes MUST be placed before work-orders/{workOrder} parameters
     Route::get('work-orders/import', [AdminWorkOrderController::class, 'importForm'])->name('work_orders.import.form');
     Route::post('work-orders/import', [AdminWorkOrderController::class, 'import'])->name('work_orders.import');
@@ -55,7 +54,7 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     Route::post('work-orders/bulk-print', [AdminWorkOrderController::class, 'bulkPrint'])->name('work_orders.bulk-print');
     Route::match(['get', 'post'], 'work-orders/export', [AdminWorkOrderController::class, 'export'])->name('work_orders.export');
     Route::post('work-orders/bulk-export', [AdminWorkOrderController::class, 'export'])->name('work_orders.bulk-export');
-    
+
     // Explicit craftsman resource routes
     Route::get('work-orders/{workOrder}/print', [AdminWorkOrderController::class, 'print'])->name('work_orders.print');
     Route::post('work-orders/{workOrder}/allocate', [AdminWorkOrderController::class, 'allocate'])->name('work_orders.allocate');

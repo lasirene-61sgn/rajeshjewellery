@@ -14,14 +14,9 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class WorkOrdersExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithColumnFormatting
+class WorkOrdersExport implements FromCollection, ShouldAutoSize, WithColumnFormatting, WithHeadings, WithMapping, WithStyles
 {
-    /**
-     * @param \Illuminate\Support\Enumerable $orders
-     */
-    public function __construct(protected Enumerable $orders)
-    {
-    }
+    public function __construct(protected Enumerable $orders) {}
 
     public function collection(): Enumerable
     {
@@ -44,7 +39,6 @@ class WorkOrdersExport implements FromCollection, WithHeadings, WithMapping, Sho
     }
 
     /**
-     * @param mixed $row
      * @return array<int, mixed>
      */
     public function map(mixed $row): array
@@ -75,7 +69,6 @@ class WorkOrdersExport implements FromCollection, WithHeadings, WithMapping, Sho
     }
 
     /**
-     * @param Worksheet $sheet
      * @return array<int|string, array<string, mixed>>|null
      */
     public function styles(Worksheet $sheet): ?array
