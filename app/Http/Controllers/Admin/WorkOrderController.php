@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Craftsman;
 use App\Models\DesignCode;
 use App\Models\WorkOrder;
+use App\Exports\WorkOrdersExport;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class WorkOrderController extends Controller
 {
@@ -570,6 +573,129 @@ class WorkOrderController extends Controller
         $workOrders = WorkOrder::with('craftsman')->whereIn('id', $request->order_ids)->get();
 
         return view('admin.work_orders.print', compact('workOrders'));
+    }
+
+    public function export(Request $request): BinaryFileResponse|RedirectResponse
+    {
+        // 1. If specific order IDs are selected (checkbox selection)
+        if ($request->has('order_ids') && !empty($request->order_ids)) {
+            $orderIds = is_array($request->order_ids) ? $request->order_ids : explode(',', (string) $request->order_ids);
+            $orderIds = array_filter(array_map('trim', $orderIds));
+
+            $orders = WorkOrder::whereIn('id', $orderIds)
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->get();
+
+            $fileName = 'work_orders_selected_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
+        } else {
+            // 2. Otherwise apply tab and filter toolbar parameters
+            $currentTab = $request->input('tab', 'all');
+            $query = WorkOrder::query()->orderBy('created_at', 'desc')->orderBy('id', 'desc');
+
+            if ($request->filled('search')) {
+                $search = trim($request->search);
+                $query->where(function ($q) use ($search) {
+                    $q->where('work_order_no', 'like', "%{$search}%")
+                      ->orWhere('reference_no', 'like', "%{$search}%")
+                      ->orWhere('product_name', 'like', "%{$search}%")
+                      ->orWhere('design_code', 'like', "%{$search}%")
+                      ->orWhere('design_nickname', 'like', "%{$search}%")
+                      ->orWhere('seal', 'like', "%{$search}%")
+                      ->orWhereExists(function ($sub) use ($search) {
+                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                              ->from('design_codes')
+                              ->whereColumn('design_codes.code', 'work_orders.design_code')
+                              ->where('design_codes.nickname', 'like', "%{$search}%");
+                      });
+                });
+            }
+
+            if ($request->filled('category')) {
+                $query->where('category', $request->category);
+            }
+
+            if ($request->filled('subcategory')) {
+                $query->where('subcategory', $request->subcategory);
+            }
+
+            if ($request->filled('craftsman_id')) {
+                $craftsmanId = $request->craftsman_id;
+                $query->where(function ($q) use ($craftsmanId) {
+                    $q->where('craftsman_id', $craftsmanId)
+                      ->orWhereExists(function ($sub) use ($craftsmanId) {
+                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                              ->from('design_codes')
+                              ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                              ->whereColumn('design_codes.code', 'work_orders.design_code')
+                              ->where('craftsman_design_code.craftsman_id', $craftsmanId);
+                      });
+                });
+            }
+
+            if ($request->filled('design_code')) {
+                $query->where('design_code', $request->design_code);
+            }
+
+            if ($request->filled('product_name')) {
+                $query->where('product_name', $request->product_name);
+            }
+
+            $selectedOrderTypes = $request->input('order_type');
+            if (!empty($selectedOrderTypes)) {
+                if (is_string($selectedOrderTypes)) {
+                    $selectedOrderTypes = array_values(array_filter(array_map('trim', explode(',', $selectedOrderTypes))));
+                } elseif (is_array($selectedOrderTypes)) {
+                    $selectedOrderTypes = array_values(array_filter(array_map('trim', $selectedOrderTypes)));
+                } else {
+                    $selectedOrderTypes = [];
+                }
+                if (!empty($selectedOrderTypes)) {
+                    $query->whereIn('order_type', $selectedOrderTypes);
+                }
+            }
+
+            if ($request->filled('nickname')) {
+                $nickFilter = trim($request->nickname);
+                $query->where(function ($q) use ($nickFilter) {
+                    $q->where('design_nickname', 'like', "%{$nickFilter}%")
+                      ->orWhereExists(function ($sub) use ($nickFilter) {
+                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                              ->from('design_codes')
+                              ->whereColumn('design_codes.code', 'work_orders.design_code')
+                              ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                      });
+                });
+            }
+
+            if ($request->filled('from_date')) {
+                $query->whereDate('created_at', '>=', $request->from_date);
+            }
+
+            if ($request->filled('to_date')) {
+                $query->whereDate('created_at', '<=', $request->to_date);
+            }
+
+            match ($currentTab) {
+                'pending'      => $query->where('status', 'pending'),
+                'allocated'    => $query->where('status', 'allocated'),
+                'in_process'   => $query->where('status', 'in_process'),
+                'returned'     => $query->where('status', 'returned'),
+                'for_approval' => $query->where('status', 'for_approval'),
+                'completed'    => $query->where('status', 'completed'),
+                'overdue'      => $query->where('status', '!=', 'completed')->whereDate('due_date', '<', Carbon::today()),
+                default        => null,
+            };
+
+            $orders = $query->get();
+            $fileName = 'work_orders_' . $currentTab . '_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
+        }
+
+        if ($orders->isEmpty()) {
+            return back()->with('error', 'No orders found to export.');
+        }
+
+        return Excel::download(new WorkOrdersExport($orders), $fileName);
     }
 
     public function destroy(WorkOrder $workOrder): RedirectResponse

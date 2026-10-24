@@ -53,6 +53,8 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     Route::post('work-orders/bulk-allocate', [AdminWorkOrderController::class, 'bulkAllocate'])->name('work_orders.bulk-allocate');
     Route::post('work-orders/bulk-complete', [AdminWorkOrderController::class, 'bulkComplete'])->name('work_orders.bulk-complete');
     Route::post('work-orders/bulk-print', [AdminWorkOrderController::class, 'bulkPrint'])->name('work_orders.bulk-print');
+    Route::match(['get', 'post'], 'work-orders/export', [AdminWorkOrderController::class, 'export'])->name('work_orders.export');
+    Route::post('work-orders/bulk-export', [AdminWorkOrderController::class, 'export'])->name('work_orders.bulk-export');
     
     // Explicit craftsman resource routes
     Route::get('work-orders/{workOrder}/print', [AdminWorkOrderController::class, 'print'])->name('work_orders.print');

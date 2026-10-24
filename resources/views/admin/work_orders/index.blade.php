@@ -12,7 +12,38 @@
             <p class="text-sm text-slate-500">Track jewelry fabrication, allocate craftsmen, and approve finished pieces.</p>
         </div>
         <div class="flex items-center gap-3">
-            <a href="{{ route('admin.work_orders.import.form') }}" class="inline-flex items-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
+            <form method="POST" action="{{ route('admin.work_orders.export') }}" class="inline">
+                @csrf
+                <input type="hidden" name="tab" value="{{ $currentTab }}">
+                <input type="hidden" name="search" value="{{ request('search') }}">
+                <input type="hidden" name="category" value="{{ request('category') }}">
+                <input type="hidden" name="subcategory" value="{{ request('subcategory') }}">
+                <input type="hidden" name="craftsman_id" value="{{ request('craftsman_id') }}">
+                <input type="hidden" name="design_code" value="{{ request('design_code') }}">
+                <input type="hidden" name="product_name" value="{{ request('product_name') }}">
+                <input type="hidden" name="nickname" value="{{ request('nickname') }}">
+                <input type="hidden" name="from_date" value="{{ request('from_date') }}">
+                <input type="hidden" name="to_date" value="{{ request('to_date') }}">
+                @if(is_array(request('order_type')))
+                    @foreach(request('order_type') as $ot)
+                        <input type="hidden" name="order_type[]" value="{{ $ot }}">
+                    @endforeach
+                @elseif(request('order_type'))
+                    <input type="hidden" name="order_type" value="{{ request('order_type') }}">
+                @endif
+                <template x-for="id in selectedOrders" :key="id">
+                    <input type="hidden" name="order_ids[]" :value="id">
+                </template>
+                <button type="submit" class="inline-flex items-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span>Export Excel</span>
+                    <span x-show="selectedOrders.length > 0" class="ml-1.5 px-1.5 py-0.5 text-xs bg-emerald-800 text-white rounded-full font-bold" x-text="selectedOrders.length"></span>
+                </button>
+            </form>
+
+            <a href="{{ route('admin.work_orders.import.form') }}" class="inline-flex items-center px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                 </svg>
@@ -364,6 +395,19 @@
                     </button>
                 </form>
             @endif
+
+            <form method="POST" action="{{ route('admin.work_orders.bulk-export') }}" class="flex items-center">
+                @csrf
+                <template x-for="id in selectedOrders" :key="id">
+                    <input type="hidden" name="order_ids[]" :value="id">
+                </template>
+                <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Export Excel (<span x-text="selectedOrders.length"></span>)
+                </button>
+            </form>
 
             <form method="POST" action="{{ route('admin.work_orders.bulk-print') }}" class="flex items-center" target="_blank">
                 @csrf
