@@ -12,7 +12,7 @@
             <p class="text-xs text-stone-500 mt-0.5">Work Order Specifications & Details</p>
         </div>
         <div class="flex items-center gap-2.5 w-full sm:w-auto">
-            @if(in_array($workOrder->status, ['in_process', 'returned']))
+            @if(in_array($workOrder->status, ['in_process', 'returned', 'partially_completed']))
                 <form method="POST" action="{{ route('craftsman.work-orders.submit', $workOrder) }}" onsubmit="return confirm('Submit this piece for quality approval?')" class="flex-1 sm:flex-none">
                     @csrf
                     <button type="submit" class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2">
@@ -104,8 +104,16 @@
                     @endif
                     @if($workOrder->quantity)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Quantity</span>
+                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Total Qty</span>
                         <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->quantity }} {{ $workOrder->unit_type }}</span>
+                    </div>
+                    <div class="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                        <span class="text-[10px] text-emerald-600 block uppercase font-bold tracking-wider">Completed</span>
+                        <span class="text-xs sm:text-sm font-black text-emerald-800 mt-0.5 block">{{ $workOrder->completed_quantity ?? 0 }}</span>
+                    </div>
+                    <div class="bg-amber-50 p-3 rounded-2xl border border-amber-100">
+                        <span class="text-[10px] text-amber-600 block uppercase font-bold tracking-wider">Balance</span>
+                        <span class="text-xs sm:text-sm font-black text-amber-800 mt-0.5 block">{{ $workOrder->balance_quantity }}</span>
                     </div>
                     @endif
                     @if($workOrder->size)

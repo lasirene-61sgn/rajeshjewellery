@@ -68,31 +68,33 @@ class WorkOrderController extends Controller
 
         $baseQuery = clone $query;
 
-        // Status Tabs Logic (All, In-Process, For Approval, Completed, Overdue)
+        // Status Tabs Logic (All, In-Process, Partially Completed, For Approval, Completed, Overdue)
         match ($currentTab) {
-            'all'          => null,
-            'allocated'    => $query->where('status', 'allocated'),
-            'in_process'   => $query->whereIn('status', ['in_process', 'returned']),
-            'returned'     => $query->where('status', 'returned'),
-            'for_approval' => $query->where('status', 'for_approval'),
-            'completed'    => $query->where('status', 'completed'),
-            'overdue'      => $query->where('status', '!=', 'completed')
+            'all'                 => null,
+            'allocated'           => $query->where('status', 'allocated'),
+            'in_process'          => $query->whereIn('status', ['in_process', 'returned']),
+            'partially_completed' => $query->where('status', 'partially_completed'),
+            'returned'            => $query->where('status', 'returned'),
+            'for_approval'        => $query->where('status', 'for_approval'),
+            'completed'           => $query->where('status', 'completed'),
+            'overdue'             => $query->where('status', '!=', 'completed')
                 ->where(function ($q) use ($today) {
                     $q->whereDate('return_due_date', '<', $today)
                         ->orWhere(function ($sub) use ($today) {
                             $sub->whereNull('return_due_date')->whereDate('due_date', '<', $today);
                         });
                 }),
-            default        => null,
+            default               => null,
         };
 
         $counts = [
-            'all'          => (clone $baseQuery)->count(),
-            'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
-            'in_process'   => (clone $baseQuery)->whereIn('status', ['in_process', 'returned'])->count(),
-            'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
-            'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
-            'overdue'      => (clone $baseQuery)->where('status', '!=', 'completed')
+            'all'                 => (clone $baseQuery)->count(),
+            'allocated'           => (clone $baseQuery)->where('status', 'allocated')->count(),
+            'in_process'          => (clone $baseQuery)->whereIn('status', ['in_process', 'returned'])->count(),
+            'partially_completed' => (clone $baseQuery)->where('status', 'partially_completed')->count(),
+            'for_approval'        => (clone $baseQuery)->where('status', 'for_approval')->count(),
+            'completed'           => (clone $baseQuery)->where('status', 'completed')->count(),
+            'overdue'             => (clone $baseQuery)->where('status', '!=', 'completed')
                 ->where(function ($q) use ($today) {
                     $q->whereDate('return_due_date', '<', $today)
                         ->orWhere(function ($sub) use ($today) {
@@ -188,7 +190,7 @@ class WorkOrderController extends Controller
         $craftsmanId = Auth::guard('craftsman')->id();
         $updated = WorkOrder::where('craftsman_id', $craftsmanId)
             ->whereIn('id', $request->order_ids)
-            ->whereIn('status', ['in_process', 'returned'])
+            ->whereIn('status', ['in_process', 'returned', 'partially_completed'])
             ->update([
                 'status'       => 'for_approval',
                 'submitted_at' => Carbon::now(),

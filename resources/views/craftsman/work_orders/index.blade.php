@@ -84,9 +84,10 @@
     <div class="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
         @php
         $tabs = [
-            'in_process'   => ['label' => 'Order Pending', 'count' => $counts['in_process'], 'dot' => 'bg-orange-500'],
-            'for_approval' => ['label' => 'For Approval', 'count' => $counts['for_approval'], 'dot' => 'bg-indigo-400 animate-pulse'],
-            'overdue'      => ['label' => 'Overdue', 'count' => $counts['overdue'], 'dot' => 'bg-rose-500'],
+            'in_process'          => ['label' => 'Order Pending', 'count' => $counts['in_process'], 'dot' => 'bg-orange-500'],
+            'partially_completed' => ['label' => 'Partially Completed', 'count' => $counts['partially_completed'], 'dot' => 'bg-purple-500'],
+            'for_approval'        => ['label' => 'For Approval', 'count' => $counts['for_approval'], 'dot' => 'bg-indigo-400 animate-pulse'],
+            'overdue'             => ['label' => 'Overdue', 'count' => $counts['overdue'], 'dot' => 'bg-rose-500'],
         ];
         @endphp
         @foreach($tabs as $key => $tab)
@@ -390,12 +391,13 @@
                                 @endif
                                 @php
                                     $statusConfig = [
-                                        'pending'      => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
-                                        'allocated'    => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
-                                        'in_process'   => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
-                                        'for_approval' => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
-                                        'returned'     => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'QC Defect'],
-                                        'completed'    => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
+                                        'pending'             => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'allocated'           => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
+                                        'in_process'          => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'partially_completed' => ['bg' => 'bg-purple-100 text-purple-800 border-purple-200 font-bold', 'dot' => 'bg-purple-500', 'label' => 'Partially Completed'],
+                                        'for_approval'        => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
+                                        'returned'            => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'QC Defect'],
+                                        'completed'           => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
                                     ];
                                     $st = $statusConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucfirst(str_replace('_', ' ', $order->status))];
                                 @endphp
@@ -413,7 +415,12 @@
                             </td>
                             <td class="px-4 py-3 text-xs">
                                 <div class="text-slate-700">{{ $order->category }} @if($order->size) &bull; Size: {{ $order->size }} @endif</div>
-                                <div class="text-slate-400">{{ $order->quantity }} {{ $order->unit_type }}</div>
+                                <div class="font-medium text-slate-800">Total: {{ $order->quantity }} {{ $order->unit_type }}</div>
+                                <div class="flex items-center gap-1.5 mt-0.5 text-2xs">
+                                    <span class="text-slate-500">Done: <strong class="text-emerald-700 font-bold">{{ $order->completed_quantity ?? 0 }}</strong></span>
+                                    <span class="text-slate-300">|</span>
+                                    <span class="text-slate-500">Bal: <strong class="text-amber-600 font-bold">{{ $order->balance_quantity }}</strong></span>
+                                </div>
                             </td>
                             <td class="px-4 py-3 text-xs">
                                 <div class="font-semibold text-slate-800">{{ $order->hallmark_purity }}</div>
@@ -427,7 +434,7 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                                @if(in_array($order->status, ['in_process', 'returned']))
+                                @if(in_array($order->status, ['in_process', 'returned', 'partially_completed']))
                                 <button type="button" onclick="if(confirm('Submit this piece for QC inspection?')) { submitSingleAction('{{ route('craftsman.work-orders.submit', $order) }}'); }" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Send Approval</button>
                                 @endif
                                 <a href="{{ route('craftsman.work-orders.show', $order) }}" class="text-slate-500 hover:text-amber-600 text-xs font-bold transition-colors">Details &rarr;</a>
@@ -504,8 +511,8 @@
 
                     <template x-if="ordersList[currentIndex]?.quantity">
                         <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                            <span class="text-[10px] text-slate-400 block uppercase font-bold">Quantity</span>
-                            <span class="text-xs font-bold text-slate-800" x-text="ordersList[currentIndex].quantity"></span>
+                            <span class="text-[10px] text-slate-400 block uppercase font-bold">Qty (Tot/Done/Bal)</span>
+                            <span class="text-xs font-bold text-slate-800" x-text="ordersList[currentIndex].quantity + ' (' + (ordersList[currentIndex].completed_quantity || 0) + '/' + (ordersList[currentIndex].balance_quantity ?? ((ordersList[currentIndex].quantity || 0) - (ordersList[currentIndex].completed_quantity || 0))) + ')'"></span>
                         </div>
                     </template>
 

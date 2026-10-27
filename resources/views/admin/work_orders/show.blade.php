@@ -58,8 +58,14 @@
             </div>
 
             <div>
-                <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Unit Type & Quantity</span>
-                <p class="text-sm font-medium text-slate-800">{{ $workOrder->quantity }} {{ $workOrder->unit_type }}</p>
+                <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Quantity & Progress</span>
+                <p class="text-sm font-medium text-slate-800">
+                    Total: <strong class="text-slate-900">{{ $workOrder->quantity }} {{ $workOrder->unit_type }}</strong>
+                    <span class="mx-1 text-slate-300">|</span>
+                    Done: <strong class="text-emerald-700">{{ $workOrder->completed_quantity ?? 0 }}</strong>
+                    <span class="mx-1 text-slate-300">|</span>
+                    Bal: <strong class="text-amber-600">{{ $workOrder->balance_quantity }}</strong>
+                </p>
             </div>
 
             <div>

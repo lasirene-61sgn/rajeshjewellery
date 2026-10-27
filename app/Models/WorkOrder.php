@@ -28,6 +28,7 @@ class WorkOrder extends Model
         'subcategory',
         'unit_type',
         'quantity',
+        'completed_quantity',
         'screw_type',
         'size',
         'length',
@@ -56,6 +57,7 @@ class WorkOrder extends Model
 
     protected $appends = [
         'has_seal',
+        'balance_quantity',
     ];
 
     #[Override]
@@ -65,6 +67,7 @@ class WorkOrder extends Model
             'rhodium_polish' => 'boolean',
             'target_weight' => 'decimal:3',
             'quantity' => 'integer',
+            'completed_quantity' => 'integer',
             'return_count' => 'integer',
             'due_date'  => 'date',
             'return_due_date' => 'date',
@@ -124,9 +127,25 @@ class WorkOrder extends Model
         return $query->where('status', 'for_approval');
     }
 
+    public function scopePartiallyCompleted(Builder $query): Builder
+    {
+        return $query->where('status', 'partially_completed');
+    }
+
     public function scopeCompleted(Builder $query): Builder
     {
         return $query->where('status', 'completed');
+    }
+
+    /**
+     * Get remaining balance quantity
+     */
+    public function getBalanceQuantityAttribute(): int
+    {
+        $total = (int) ($this->quantity ?? 0);
+        $completed = (int) ($this->completed_quantity ?? 0);
+
+        return max(0, $total - $completed);
     }
 
     public function scopeOverDue(Builder $query): Builder

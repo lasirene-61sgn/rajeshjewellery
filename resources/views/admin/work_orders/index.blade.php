@@ -98,6 +98,13 @@
                         'active' => 'border-red-500 text-red-900 bg-rose-50/80',
                         'badge_active' => 'bg-red-500 text-white font-bold',
                     ],
+                    'partially_completed' => [
+                        'label' => 'Partially Completed',
+                        'count' => $counts['partially_completed'],
+                        'dot' => 'bg-purple-500',
+                        'active' => 'border-purple-600 text-purple-900 bg-purple-50/80',
+                        'badge_active' => 'bg-purple-600 text-white font-bold',
+                    ],
                     'for_approval' => [
                         'label' => 'For Approval',
                         'count' => $counts['for_approval'],
@@ -384,7 +391,7 @@
                 </form>
             @endif
 
-            @if(in_array($currentTab, ['allocated', 'in_process', 'for_approval']))
+            @if(in_array($currentTab, ['allocated', 'in_process', 'partially_completed', 'for_approval']))
                 <form method="POST" action="{{ route('admin.work_orders.bulk-complete') }}" onsubmit="return confirm('Are you sure you want to mark the selected orders as completed?')" class="flex items-center">
                     @csrf
                     <template x-for="id in selectedOrders" :key="id">
@@ -436,7 +443,7 @@
                         <th class="px-4 py-3.5">Product & Design Code (Nickname)</th>
                         <th class="px-4 py-3.5">Weight</th>
                         <th class="px-4 py-3.5">Length</th>
-                        <th class="px-4 py-3.5">Qty</th>
+                        <th class="px-4 py-3.5 min-w-[145px]">Qty & Progress</th>
                         <th class="px-4 py-3.5">Craftsman</th>
                         <th class="px-4 py-3.5">Status</th>
                         <th class="px-4 py-3.5">Created Date</th>
@@ -511,8 +518,42 @@
                             <td class="px-4 py-3">
                                 <div class="font-medium text-slate-800">{{ ($order->size) }}</div>
                             </td>
-                            <td class="px-4 py-3">
-                                <div class="font-medium text-slate-800">{{ ($order->quantity) }}</div>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-1.5 text-xs">
+                                        <span class="text-slate-400">Total:</span>
+                                        <span class="font-bold text-slate-800">{{ $order->quantity }}</span>
+                                        <span class="text-slate-300">|</span>
+                                        <span class="text-slate-400">Bal:</span>
+                                        <span class="font-bold {{ $order->balance_quantity > 0 ? 'text-amber-600' : 'text-emerald-600' }}">
+                                            {{ $order->balance_quantity }}
+                                        </span>
+                                    </div>
+
+                                    @if($order->status !== 'completed')
+                                        <form method="POST" action="{{ route('admin.work_orders.update-quantity', $order) }}" class="flex items-center gap-1 mt-1">
+                                            @csrf
+                                            <span class="text-2xs text-slate-400 font-medium">Done:</span>
+                                            <input type="number" 
+                                                   name="completed_quantity" 
+                                                   value="{{ $order->completed_quantity ?? 0 }}" 
+                                                   min="0" 
+                                                   max="{{ $order->quantity }}"
+                                                   title="Enter completed quantity (0 to {{ $order->quantity }})"
+                                                   class="w-14 px-1.5 py-0.5 text-xs font-semibold text-slate-900 bg-white border border-slate-300 rounded shadow-2xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                            <button type="submit" 
+                                                    title="Save Completed Quantity" 
+                                                    class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-2xs font-bold shadow-2xs transition-colors">
+                                                Save
+                                            </button>
+                                        </form>
+                                    @else
+                                        <div class="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                            <span>Done: {{ $order->completed_quantity ?? $order->quantity }}</span>
+                                        </div>
+                                    @endif
+                                </div>
                             </td>
 
                             <td class="px-4 py-3">
@@ -534,12 +575,13 @@
                             <td class="px-4 py-3">
                                 @php
                                     $statusConfig = [
-                                        'pending'      => ['bg' => 'bg-amber-100 text-amber-700 border-amber-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
-                                        'allocated'    => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
-                                        'in_process'   => ['bg' => 'bg-orange-50 text-orange-700 border-orange-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
-                                        'for_approval' => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
-                                        'returned'     => ['bg' => 'bg-red-50 text-red-800 border-red-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
-                                        'completed'    => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
+                                        'pending'             => ['bg' => 'bg-amber-100 text-amber-700 border-amber-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'allocated'           => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
+                                        'in_process'          => ['bg' => 'bg-orange-50 text-orange-700 border-orange-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'partially_completed' => ['bg' => 'bg-purple-100 text-purple-800 border-purple-200 font-bold', 'dot' => 'bg-purple-500', 'label' => 'Partially Completed'],
+                                        'for_approval'        => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
+                                        'returned'            => ['bg' => 'bg-red-50 text-red-800 border-red-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
+                                        'completed'           => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
                                     ];
                                     $st = $statusConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucfirst(str_replace('_', ' ', $order->status))];
                                 @endphp
@@ -559,11 +601,11 @@
                             </td>
 
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                                @if($order->status === 'for_approval')
-                                    <form method="POST" action="{{ route('admin.work_orders.approve', $order) }}" class="inline">
+                                @if(in_array($order->status, ['for_approval', 'partially_completed']))
+                                    <form method="POST" action="{{ route('admin.work_orders.approve', $order) }}" class="inline" onsubmit="return confirm('Approve and mark this order fully completed?');">
                                         @csrf
-                                        <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold">
-                                            Approve
+                                        <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold" title="Approve & Complete All">
+                                            Approve All
                                         </button>
                                     </form>
                                 @endif

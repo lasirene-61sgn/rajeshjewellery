@@ -227,6 +227,7 @@ class WorkOrderController extends Controller
             'pending' => $query->where('status', 'pending'),
             'allocated' => $query->where('status', 'allocated'),
             'in_process' => $query->where('status', 'in_process'),
+            'partially_completed' => $query->where('status', 'partially_completed'),
             'returned' => $query->where('status', 'returned'),
             'for_approval' => $query->where('status', 'for_approval'),
             'completed' => $query->where('status', 'completed'),
@@ -240,6 +241,7 @@ class WorkOrderController extends Controller
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
             'allocated' => (clone $baseQuery)->where('status', 'allocated')->count(),
             'in_process' => (clone $baseQuery)->where('status', 'in_process')->count(),
+            'partially_completed' => (clone $baseQuery)->where('status', 'partially_completed')->count(),
             'returned' => (clone $baseQuery)->where('status', 'returned')->count(),
             'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
             'completed' => (clone $baseQuery)->where('status', 'completed')->count(),
@@ -373,6 +375,7 @@ class WorkOrderController extends Controller
             'design_nickname' => ['nullable', 'string', 'max:255'],
             'unit_type' => ['required', 'string'],
             'quantity' => ['required', 'integer', 'min:1'],
+            'completed_quantity' => ['nullable', 'integer', 'min:0'],
             'screw_type' => ['nullable', 'string'],
             'category' => ['nullable', 'string', 'max:100'],
             'subcategory' => ['nullable', 'string', 'max:100'],
@@ -416,6 +419,18 @@ class WorkOrderController extends Controller
                 ['code' => $designCodeStr],
                 ['nickname' => $validated['design_nickname'] ?? null]
             );
+        }
+
+        if ($request->has('completed_quantity')) {
+            $completed = (int) $request->completed_quantity;
+            $totalQty = (int) ($validated['quantity'] ?? $workOrder->quantity);
+            $validated['completed_quantity'] = $completed;
+            if ($completed >= $totalQty && $totalQty > 0) {
+                $validated['status'] = 'completed';
+                $validated['approved_at'] = Carbon::now();
+            } elseif ($completed > 0) {
+                $validated['status'] = 'partially_completed';
+            }
         }
 
         $workOrder->update($validated);
@@ -522,11 +537,49 @@ class WorkOrderController extends Controller
     public function approve(WorkOrder $workOrder): RedirectResponse
     {
         $workOrder->update([
+            'completed_quantity' => $workOrder->quantity,
             'status' => 'completed',
             'approved_at' => Carbon::now(),
         ]);
 
-        return back()->with('success', "Order {$workOrder->work_order_no} approved and marked completed.");
+        return back()->with('success', "Order {$workOrder->work_order_no} fully approved and marked completed ({$workOrder->quantity}/{$workOrder->quantity}).");
+    }
+
+    public function updateQuantity(Request $request, WorkOrder $workOrder): RedirectResponse
+    {
+        $totalQty = (int) $workOrder->quantity;
+
+        $validated = $request->validate([
+            'completed_quantity' => ['required', 'integer', 'min:0', 'max:' . max(1, $totalQty)],
+        ]);
+
+        $completed = (int) $validated['completed_quantity'];
+
+        if ($completed >= $totalQty && $totalQty > 0) {
+            $workOrder->update([
+                'completed_quantity' => $totalQty,
+                'status' => 'completed',
+                'approved_at' => Carbon::now(),
+            ]);
+
+            return back()->with('success', "Order {$workOrder->work_order_no} fully completed ({$totalQty}/{$totalQty}).");
+        } elseif ($completed > 0) {
+            $workOrder->update([
+                'completed_quantity' => $completed,
+                'status' => 'partially_completed',
+            ]);
+
+            $balance = $totalQty - $completed;
+            return back()->with('success', "Order {$workOrder->work_order_no} updated: {$completed} of {$totalQty} completed ({$balance} balance remaining).");
+        } else {
+            $status = $workOrder->craftsman_id ? 'in_process' : 'pending';
+            $workOrder->update([
+                'completed_quantity' => 0,
+                'status' => $status,
+            ]);
+
+            return back()->with('success', "Order {$workOrder->work_order_no} completed quantity reset to 0.");
+        }
     }
 
     public function bulkComplete(Request $request): RedirectResponse
@@ -536,10 +589,14 @@ class WorkOrderController extends Controller
             'order_ids.*' => ['exists:work_orders,id'],
         ]);
 
-        WorkOrder::whereIn('id', $request->order_ids)->update([
-            'status' => 'completed',
-            'approved_at' => Carbon::now(),
-        ]);
+        $orders = WorkOrder::whereIn('id', $request->order_ids)->get();
+        foreach ($orders as $order) {
+            $order->update([
+                'completed_quantity' => $order->quantity,
+                'status' => 'completed',
+                'approved_at' => Carbon::now(),
+            ]);
+        }
 
         return back()->with('success', count($request->order_ids) . ' work orders marked as completed.');
     }

@@ -65,7 +65,7 @@
             <input type="text" name="design_code" value="{{ old('design_code', $workOrder->design_code) }}" required placeholder="e.g. DS001" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm uppercase font-mono font-bold text-indigo-700 bg-white">
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
                 <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Unit Type *</label>
                 <select name="unit_type" required class="w-full px-3 py-2 border rounded-lg text-sm">
@@ -76,8 +76,13 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Quantity *</label>
+                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Total Quantity *</label>
                 <input type="number" name="quantity" min="1" value="{{ old('quantity', $workOrder->quantity) }}" required class="w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Completed Quantity</label>
+                <input type="number" name="completed_quantity" min="0" max="{{ $workOrder->quantity }}" value="{{ old('completed_quantity', $workOrder->completed_quantity ?? 0) }}" class="w-full px-3 py-2 border rounded-lg text-sm">
+                <span class="text-2xs text-slate-400 mt-1 block">Remaining Balance: <strong class="text-amber-600 font-bold">{{ $workOrder->balance_quantity }}</strong></span>
             </div>
         </div>
 
@@ -101,13 +106,13 @@
                     <option value="South Screw" {{ old('screw_type', $workOrder->screw_type) === 'South Screw' ? 'selected' : '' }}>South Screw</option>
                 </select>
             </div>
-            <div>
+            <!-- <div>
                 <label class="block text-xs font-semibold uppercase text-slate-700 mb-1">Rhodium Polish</label>
                 <select name="rhodium_polish" class="w-full px-3 py-2 border rounded-lg text-sm">
                     <option value="1" {{ old('rhodium_polish', $workOrder->rhodium_polish) == '1' ? 'selected' : '' }}>Yes</option>
                     <option value="0" {{ old('rhodium_polish', $workOrder->rhodium_polish) == '0' ? 'selected' : '' }}>No</option>
                 </select>
-            </div>
+            </div> -->
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
