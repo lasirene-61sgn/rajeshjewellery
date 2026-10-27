@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Work Order Print Slip - Admin Panel</title>
+    <title>Work Order Print Slip - Craftsman Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @media print {
@@ -17,7 +17,10 @@
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            .page-break { page-break-after: always; }
+            .page-break { 
+                page-break-after: always; 
+                break-after: page;
+            }
         }
 
         .a4-page {
@@ -27,6 +30,15 @@
             box-sizing: border-box;
             margin: auto;
             background: white;
+        }
+
+        /* Hardware-accelerated contrast and edge sharpening for low-res prints */
+        .print-image-sharp {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            -ms-interpolation-mode: nearest-neighbor;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
     </style>
 </head>
@@ -41,15 +53,21 @@
             <!-- Outer Page Border Container -->
             <div class="w-full h-full border-2 border-black p-4 flex flex-col justify-between">
                 
-                <!-- Main Jewelry Design Image Container (Border Removed) -->
+                <!-- Main Jewelry Design Image Container -->
                 <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden bg-stone-50 relative">
                     @if($order->design_image)
-                        <img src="{{ asset('storage/' . $order->design_image) }}" class="w-full h-full object-contain">
+                        <img 
+                            src="{{ asset('storage/' . $order->design_image) }}" 
+                            alt="Design {{ $order->design_code }}"
+                            class="w-full h-full object-contain print-image-sharp"
+                            loading="eager"
+                            decoding="sync"
+                        >
                     @else
                         <div class="text-stone-400 font-bold text-base">No Design Image Available</div>
                     @endif
 
-                    <!-- 916 Seal positioned at the bottom center of the image container in red color -->
+                    <!-- 916 Seal positioned at the bottom center of the image container -->
                     @if($order->has_seal)
                         <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black text-xs px-4 py-1 rounded shadow uppercase tracking-wider border border-red-700">
                             916 SEAL

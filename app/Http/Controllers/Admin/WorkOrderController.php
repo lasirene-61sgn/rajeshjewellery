@@ -17,9 +17,109 @@ use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Http\UploadedFile;
 
 class WorkOrderController extends Controller
 {
+
+
+    /**
+     * Process, enhance resolution, stamp seal, and save jewelry design image.
+     */
+    protected function processAndSaveDesignImage(UploadedFile $file, string $referenceNo = '', string $sealValue = ''): string
+    {
+        $filePath = $file->getRealPath();
+        $info = @getimagesize($filePath);
+        $mime = $info['mime'] ?? 'image/jpeg';
+        $origW = $info[0] ?? 0;
+        $origH = $info[1] ?? 0;
+
+        $src = match ($mime) {
+            'image/png' => @imagecreatefrompng($filePath),
+            'image/webp' => @imagecreatefromwebp($filePath),
+            default => @imagecreatefromjpeg($filePath)
+        };
+
+        if (! $src || $origW === 0 || $origH === 0) {
+            return $file->store('work_orders', 'public');
+        }
+
+        // 1. UPSCALE FOR A4 PRINT: Ensure width is at least 1800px (standard crisp print size)
+        $targetW = max($origW, 1800);
+        $targetH = (int) round(($origH / $origW) * $targetW);
+
+        $canvas = imagecreatetruecolor($targetW, $targetH);
+
+        // Retain PNG/WebP transparency if present
+        if ($mime === 'image/png' || $mime === 'image/webp') {
+            imagealphablending($canvas, false);
+            imagesavealpha($canvas, true);
+            $transparent = imagecolorallocatealpha($canvas, 255, 255, 255, 127);
+            imagefilledrectangle($canvas, 0, 0, $targetW, $targetH, $transparent);
+        } else {
+            $white = imagecolorallocate($canvas, 255, 255, 255);
+            imagefilledrectangle($canvas, 0, 0, $targetW, $targetH, $white);
+        }
+
+        // High quality resample
+        imagecopyresampled($canvas, $src, 0, 0, 0, 0, $targetW, $targetH, $origW, $origH);
+        imagedestroy($src);
+
+        // 2. ENHANCE / SHARPEN: Apply unsharp convolution matrix for crisp jewelry contours
+        $sharpenMatrix = [
+            [-1, -1, -1],
+            [-1, 16, -1],
+            [-1, -1, -1]
+        ];
+        $divisor = 8;
+        $offset = 0;
+        imageconvolution($canvas, $sharpenMatrix, $divisor, $offset);
+
+        // 3. APPLY 916 SEAL (if ESO in reference or seal requested)
+        if (stripos($referenceNo, 'ESO') !== false || ! empty($sealValue)) {
+            $x = 40;
+            $y = 40;
+            $text = ' 916 SEAL ';
+            $scale = 4; // Scaled up proportionally for 1800px+ high-res image
+
+            $font = 5;
+            $fontWidth = imagefontwidth($font);
+            $fontHeight = imagefontheight($font);
+
+            $textW = strlen($text) * $fontWidth;
+            $textH = $fontHeight;
+
+            $scaledW = $textW * $scale;
+            $scaledH = $textH * $scale;
+
+            $smallImg = imagecreatetruecolor($textW, $textH);
+            $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
+            $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
+
+            imagefill($smallImg, 0, 0, $bgColorSmall);
+            imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
+
+            $padding = 15;
+            $bgColor = imagecolorallocate($canvas, 245, 158, 11);
+            imagefilledrectangle($canvas, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
+
+            imagecopyresampled($canvas, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
+            imagedestroy($smallImg);
+        }
+
+        // 4. SAVE AT HIGH PRINT QUALITY (95% quality)
+        $filename = 'work_orders/' . uniqid() . '.jpg';
+        ob_start();
+        imagejpeg($canvas, null, 95);
+        $imageData = ob_get_clean();
+        imagedestroy($canvas);
+
+        Storage::disk('public')->put($filename, $imageData);
+
+        return $filename;
+    }
+
+
     public function index(Request $request): View
     {
         $currentTab = $request->query('tab', 'all');
@@ -207,78 +307,19 @@ class WorkOrderController extends Controller
             'order_type' => ['nullable', 'string'],
         ]);
 
+        // Enhanced Image Processing
         if ($request->hasFile('design_image')) {
-            $file = $request->file('design_image');
-            $filename = 'work_orders/'.uniqid().'.'.$file->getClientOriginalExtension();
-
-            $referenceNo = $validated['reference_no'] ?? '';
-            $sealValue = $validated['seal'] ?? '';
-
-            if (stripos($referenceNo, 'ESO') !== false || ! empty($sealValue)) {
-                $filePath = $file->getRealPath();
-                $info = @getimagesize($filePath);
-                $mime = $info['mime'] ?? 'image/jpeg';
-
-                $img = match ($mime) {
-                    'image/png' => @imagecreatefrompng($filePath),
-                    'image/webp' => @imagecreatefromwebp($filePath),
-                    default => @imagecreatefromjpeg($filePath)
-                };
-
-                if ($img) {
-                    $x = 30;
-                    $y = 30;
-                    $text = ' 916 SEAL ';
-
-                    $scale = 3;
-
-                    $font = 5;
-                    $fontWidth = imagefontwidth($font);
-                    $fontHeight = imagefontheight($font);
-
-                    $textW = strlen($text) * $fontWidth;
-                    $textH = $fontHeight;
-
-                    $scaledW = $textW * $scale;
-                    $scaledH = $textH * $scale;
-
-                    $smallImg = imagecreatetruecolor($textW, $textH);
-                    $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
-                    $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
-
-                    imagefill($smallImg, 0, 0, $bgColorSmall);
-                    imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
-
-                    $padding = 10;
-                    $bgColor = imagecolorallocate($img, 245, 158, 11);
-                    imagefilledrectangle($img, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
-
-                    imagecopyresampled($img, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
-                    imagedestroy($smallImg);
-
-                    ob_start();
-                    match ($mime) {
-                        'image/png' => imagepng($img),
-                        'image/webp' => imagewebp($img),
-                        default => imagejpeg($img, null, 90)
-                    };
-                    $imageData = ob_get_clean();
-                    imagedestroy($img);
-
-                    Storage::disk('public')->put($filename, $imageData);
-                    $validated['design_image'] = $filename;
-                } else {
-                    $validated['design_image'] = $file->store('work_orders', 'public');
-                }
-            } else {
-                $validated['design_image'] = $file->store('work_orders', 'public');
-            }
+            $validated['design_image'] = $this->processAndSaveDesignImage(
+                $request->file('design_image'),
+                $validated['reference_no'] ?? '',
+                $validated['seal'] ?? ''
+            );
         }
 
         $year = date('Y');
         $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
         $nextNumber = $lastOrder ? ((int) substr($lastOrder->work_order_no, -4)) + 1 : 1;
-        $validated['work_order_no'] = 'WO-'.$year.'-'.str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        $validated['work_order_no'] = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
         $validated['status'] = 'pending';
 
@@ -348,76 +389,17 @@ class WorkOrderController extends Controller
             'order_type' => ['nullable', 'string'],
         ]);
 
+        // Enhanced Image Processing
         if ($request->hasFile('design_image')) {
             if ($workOrder->design_image) {
                 Storage::disk('public')->delete($workOrder->design_image);
             }
 
-            $file = $request->file('design_image');
-            $filename = 'work_orders/'.uniqid().'.'.$file->getClientOriginalExtension();
-
-            $referenceNo = $validated['reference_no'] ?? '';
-            $sealValue = $validated['seal'] ?? '';
-
-            if (stripos($referenceNo, 'ESO') !== false || ! empty($sealValue)) {
-                $filePath = $file->getRealPath();
-                $info = @getimagesize($filePath);
-                $mime = $info['mime'] ?? 'image/jpeg';
-
-                $img = match ($mime) {
-                    'image/png' => @imagecreatefrompng($filePath),
-                    'image/webp' => @imagecreatefromwebp($filePath),
-                    default => @imagecreatefromjpeg($filePath)
-                };
-
-                if ($img) {
-                    $x = 30;
-                    $y = 30;
-                    $text = ' 916 SEAL ';
-
-                    $scale = 3;
-
-                    $font = 5;
-                    $fontWidth = imagefontwidth($font);
-                    $fontHeight = imagefontheight($font);
-
-                    $textW = strlen($text) * $fontWidth;
-                    $textH = $fontHeight;
-
-                    $scaledW = $textW * $scale;
-                    $scaledH = $textH * $scale;
-
-                    $smallImg = imagecreatetruecolor($textW, $textH);
-                    $bgColorSmall = imagecolorallocate($smallImg, 245, 158, 11);
-                    $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
-
-                    imagefill($smallImg, 0, 0, $bgColorSmall);
-                    imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
-
-                    $padding = 10;
-                    $bgColor = imagecolorallocate($img, 245, 158, 11);
-                    imagefilledrectangle($img, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
-
-                    imagecopyresampled($img, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
-                    imagedestroy($smallImg);
-
-                    ob_start();
-                    match ($mime) {
-                        'image/png' => imagepng($img),
-                        'image/webp' => imagewebp($img),
-                        default => imagejpeg($img, null, 90)
-                    };
-                    $imageData = ob_get_clean();
-                    imagedestroy($img);
-
-                    Storage::disk('public')->put($filename, $imageData);
-                    $validated['design_image'] = $filename;
-                } else {
-                    $validated['design_image'] = $file->store('work_orders', 'public');
-                }
-            } else {
-                $validated['design_image'] = $file->store('work_orders', 'public');
-            }
+            $validated['design_image'] = $this->processAndSaveDesignImage(
+                $request->file('design_image'),
+                $validated['reference_no'] ?? '',
+                $validated['seal'] ?? ''
+            );
         }
 
         $validated['rhodium_polish'] = $request->boolean('rhodium_polish');
@@ -495,7 +477,7 @@ class WorkOrderController extends Controller
             $workOrder->update($updateData);
         }
 
-        return back()->with('success', count($request->order_ids).' work orders successfully allocated.');
+        return back()->with('success', count($request->order_ids) . ' work orders successfully allocated.');
     }
 
     public function undoAllocation(WorkOrder $workOrder): RedirectResponse
@@ -559,7 +541,7 @@ class WorkOrderController extends Controller
             'approved_at' => Carbon::now(),
         ]);
 
-        return back()->with('success', count($request->order_ids).' work orders marked as completed.');
+        return back()->with('success', count($request->order_ids) . ' work orders marked as completed.');
     }
 
     public function print(WorkOrder $workOrder): View
@@ -594,7 +576,7 @@ class WorkOrderController extends Controller
                 ->orderBy('id', 'desc')
                 ->get();
 
-            $fileName = 'work_orders_selected_'.Carbon::now()->format('Y-m-d_His').'.xlsx';
+            $fileName = 'work_orders_selected_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
         } else {
             // 2. Otherwise apply tab and filter toolbar parameters
             $currentTab = $request->input('tab', 'all');
@@ -695,7 +677,7 @@ class WorkOrderController extends Controller
             };
 
             $orders = $query->get();
-            $fileName = 'work_orders_'.$currentTab.'_'.Carbon::now()->format('Y-m-d_His').'.xlsx';
+            $fileName = 'work_orders_' . $currentTab . '_' . Carbon::now()->format('Y-m-d_His') . '.xlsx';
         }
 
         if ($orders->isEmpty()) {
@@ -876,7 +858,7 @@ class WorkOrderController extends Controller
 
             $lastOrder = WorkOrder::whereYear('created_at', $year)->latest('id')->first();
             $nextNumber = $lastOrder ? ((int) substr(str_replace('_', '-', $lastOrder->work_order_no), -4)) + 1 : ($importedCount + 1);
-            $workOrderNo = 'WO-'.$year.'-'.str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            $workOrderNo = 'WO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
             $designCodeStr = ! empty($designCode) ? $designCode : 'DEFAULT';
 

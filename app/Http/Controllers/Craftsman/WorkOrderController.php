@@ -30,9 +30,9 @@ class WorkOrderController extends Controller
             $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('work_order_no', 'like', "%{$search}%")
-                  ->orWhere('reference_no', 'like', "%{$search}%")
-                  ->orWhere('product_name', 'like', "%{$search}%")
-                  ->orWhere('design_code', 'like', "%{$search}%");
+                    ->orWhere('reference_no', 'like', "%{$search}%")
+                    ->orWhere('product_name', 'like', "%{$search}%")
+                    ->orWhere('design_code', 'like', "%{$search}%");
             });
         }
 
@@ -52,9 +52,9 @@ class WorkOrderController extends Controller
             $nickname = $request->nickname;
             $query->where(function ($q) use ($nickname) {
                 $q->where('design_nickname', $nickname)
-                  ->orWhereIn('design_code', function ($sub) use ($nickname) {
-                      $sub->select('code')->from('design_codes')->where('nickname', $nickname);
-                  });
+                    ->orWhereIn('design_code', function ($sub) use ($nickname) {
+                        $sub->select('code')->from('design_codes')->where('nickname', $nickname);
+                    });
             });
         }
 
@@ -77,12 +77,12 @@ class WorkOrderController extends Controller
             'for_approval' => $query->where('status', 'for_approval'),
             'completed'    => $query->where('status', 'completed'),
             'overdue'      => $query->where('status', '!=', 'completed')
-                                    ->where(function ($q) use ($today) {
-                                        $q->whereDate('return_due_date', '<', $today)
-                                          ->orWhere(function ($sub) use ($today) {
-                                              $sub->whereNull('return_due_date')->whereDate('due_date', '<', $today);
-                                          });
-                                    }),
+                ->where(function ($q) use ($today) {
+                    $q->whereDate('return_due_date', '<', $today)
+                        ->orWhere(function ($sub) use ($today) {
+                            $sub->whereNull('return_due_date')->whereDate('due_date', '<', $today);
+                        });
+                }),
             default        => null,
         };
 
@@ -93,12 +93,12 @@ class WorkOrderController extends Controller
             'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
             'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
             'overdue'      => (clone $baseQuery)->where('status', '!=', 'completed')
-                                      ->where(function ($q) use ($today) {
-                                          $q->whereDate('return_due_date', '<', $today)
-                                            ->orWhere(function ($sub) use ($today) {
-                                                $sub->whereNull('return_due_date')->whereDate('due_date', '<', $today);
-                                            });
-                                      })->count(),
+                ->where(function ($q) use ($today) {
+                    $q->whereDate('return_due_date', '<', $today)
+                        ->orWhere(function ($sub) use ($today) {
+                            $sub->whereNull('return_due_date')->whereDate('due_date', '<', $today);
+                        });
+                })->count(),
         ];
 
         $craftsman = Auth::guard('craftsman')->user();
@@ -106,7 +106,7 @@ class WorkOrderController extends Controller
         $categories = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('category')->distinct()->pluck('category')->filter()->values();
         $subcategories = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('subcategory')->distinct()->pluck('subcategory')->filter()->values();
         $productNames = WorkOrder::where('craftsman_id', $craftsmanId)->whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->pluck('product_name')->sort()->values();
-        
+
         $nicknames = DesignCode::whereHas('craftsmen', fn($q) => $q->where('craftsmen.id', $craftsmanId))
             ->pluck('nickname')->unique()->values();
 
@@ -202,8 +202,11 @@ class WorkOrderController extends Controller
         if ($workOrder->craftsman_id !== Auth::guard('craftsman')->id()) {
             abort(403, 'Unauthorized action.');
         }
+
         $workOrder->load('craftsman');
-        return view('craftsman.work_orders.print', compact('workOrder'));
+        $workOrders = collect([$workOrder]);
+
+        return view('craftsman.work_orders.print', compact('workOrders', 'workOrder'));
     }
 
     public function bulkPrint(Request $request): View
