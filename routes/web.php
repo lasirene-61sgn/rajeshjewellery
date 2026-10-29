@@ -58,6 +58,7 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     // Explicit craftsman resource routes
     Route::get('work-orders/{workOrder}/print', [AdminWorkOrderController::class, 'print'])->name('work_orders.print');
     Route::post('work-orders/{workOrder}/allocate', [AdminWorkOrderController::class, 'allocate'])->name('work_orders.allocate');
+    Route::post('work-orders/{workOrder}/reallocate', [AdminWorkOrderController::class, 'reallocate'])->name('work_orders.reallocate');
     Route::post('work-orders/{workOrder}/undo', [AdminWorkOrderController::class, 'undoAllocation'])->name('work_orders.undo');
     Route::post('work-orders/{workOrder}/return', [AdminWorkOrderController::class, 'returnOrder'])->name('work_orders.return');
     Route::post('work-orders/{workOrder}/approve', [AdminWorkOrderController::class, 'approve'])->name('work_orders.approve');

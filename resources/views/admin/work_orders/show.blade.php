@@ -23,6 +23,24 @@
             <p class="text-sm text-rose-900 bg-white/80 p-3 rounded-xl border border-rose-200">
                 <strong>Reason for Rejection:</strong> {{ $workOrder->reject_reason ?? 'No reason provided.' }}
             </p>
+
+            <!-- Reallocate to Another Craftsman Form -->
+            <form method="POST" action="{{ route('admin.work_orders.allocate', $workOrder) }}" class="flex flex-wrap items-center gap-3 pt-3 border-t border-rose-200">
+                @csrf
+                <span class="text-xs font-bold uppercase text-slate-700">Reallocate To:</span>
+                <select name="craftsman_id" required class="px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                    <option value="">-- Choose Another Craftsman --</option>
+                    @foreach(\App\Models\Craftsman::orderBy('name')->get() as $c)
+                        <option value="{{ $c->id }}" {{ $c->id == $workOrder->craftsman_id ? 'disabled' : '' }}>
+                            {{ $c->name }} ({{ $c->mobile }}) {{ $c->id == $workOrder->craftsman_id ? '- (Previously Rejected)' : '' }}
+                        </option>
+                    @endforeach
+                </select>
+                <input type="date" name="due_date" value="{{ optional($workOrder->due_date)->format('Y-m-d') }}" class="px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white" title="Due Date">
+                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors">
+                    Confirm Reallocation
+                </button>
+            </form>
         </div>
     @endif
 

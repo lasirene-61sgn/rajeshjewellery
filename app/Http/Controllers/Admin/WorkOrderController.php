@@ -446,16 +446,34 @@ class WorkOrderController extends Controller
     {
         $request->validate([
             'craftsman_id' => ['required', 'exists:craftsmen,id'],
+            'due_date'     => ['nullable', 'date'],
         ]);
 
-        $workOrder->update([
+        $isReallocate = $workOrder->status === 'rejected';
+
+        $updateData = [
             'craftsman_id'  => $request->craftsman_id,
             'status'        => 'allocated',
             'reject_reason' => null,
             'allocated_at'  => Carbon::now(),
-        ]);
+        ];
 
-        return back()->with('success', "Order {$workOrder->work_order_no} allocated to craftsman.");
+        if ($request->filled('due_date')) {
+            $updateData['due_date'] = $request->due_date;
+        }
+
+        $workOrder->update($updateData);
+
+        $msg = $isReallocate
+            ? "Order {$workOrder->work_order_no} reallocated to craftsman successfully."
+            : "Order {$workOrder->work_order_no} allocated to craftsman.";
+
+        return back()->with('success', $msg);
+    }
+
+    public function reallocate(Request $request, WorkOrder $workOrder): RedirectResponse
+    {
+        return $this->allocate($request, $workOrder);
     }
 
     public function bulkAllocate(Request $request): RedirectResponse

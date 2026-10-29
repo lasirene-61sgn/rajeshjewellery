@@ -373,7 +373,7 @@
             <span x-text="selectedOrders.length" class="mr-1 font-bold text-sm"></span> orders selected for bulk allocation
         </div>
         <div class="flex flex-wrap items-center gap-4">
-            @if(in_array($currentTab, ['pending', 'returned']))
+            @if(in_array($currentTab, ['pending', 'returned', 'rejected']))
                 <form method="POST" action="{{ route('admin.work_orders.bulk-allocate') }}" class="flex flex-wrap items-center gap-2 border-r border-indigo-200 pr-4">
                     @csrf
                     <template x-for="id in selectedOrders" :key="id">
@@ -393,7 +393,7 @@
                     </div>
 
                     <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
-                        Allocate Selected
+                        {{ $currentTab === 'rejected' ? 'Reallocate Selected' : 'Allocate Selected' }}
                     </button>
                 </form>
             @endif
@@ -572,8 +572,8 @@
                                             <button type="submit" class="text-xs text-rose-600 hover:underline">Undo</button>
                                         </form>
                                     @elseif($order->status === 'rejected')
-                                        <button @click="openAllocateModal({{ $order->id }}, '{{ $order->work_order_no }}', '{{ $order->design_code }}')" class="text-xs font-semibold text-indigo-600 hover:underline block mt-0.5">
-                                            + Reassign
+                                        <button type="button" @click="openReallocateModal({{ $order->id }}, '{{ $order->work_order_no }}', '{{ $order->design_code }}', {{ $order->craftsman_id ?? 'null' }}, '{{ addslashes(optional($order->craftsman)->name ?? '') }}', '{{ addslashes($order->reject_reason ?? '') }}')" class="text-xs font-bold text-indigo-600 hover:underline block mt-0.5">
+                                            Reallocate
                                         </button>
                                     @endif
                                 @else
@@ -637,6 +637,11 @@
                                     Print
                                 </a>
 
+                                @if($order->status === 'rejected')
+                                    <button type="button" @click="openReallocateModal({{ $order->id }}, '{{ $order->work_order_no }}', '{{ $order->design_code }}', {{ $order->craftsman_id ?? 'null' }}, '{{ addslashes(optional($order->craftsman)->name ?? '') }}', '{{ addslashes($order->reject_reason ?? '') }}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors">
+                                        Reallocate
+                                    </button>
+                                @endif
                                 <a href="{{ route('admin.work_orders.show', [$order, 'back_url' => request()->fullUrl()]) }}" class="text-slate-600 hover:text-indigo-600 text-xs font-medium">
                                     View
                                 </a>
@@ -709,6 +714,60 @@
         </div>
     </div>
 
+    <!-- Modal: Reallocate -->
+    <div x-show="reallocateModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.outside="reallocateModalOpen = false" class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Reallocate Work Order</h3>
+                    <p class="text-xs text-slate-500 font-mono" x-text="'#' + reallocateOrderNo"></p>
+                </div>
+                <button type="button" @click="reallocateModalOpen = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <!-- Previous Rejection Details -->
+            <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1.5">
+                <div class="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-rose-600"></span>
+                    <span>Rejected By:</span>
+                    <span class="text-rose-900 font-extrabold" x-text="reallocatePreviousCraftsmanName || 'Craftsman'"></span>
+                </div>
+                <div class="text-xs text-rose-800 bg-white/70 p-2 rounded-lg border border-rose-200/60">
+                    <span class="font-bold">Reason:</span>
+                    <span x-text="reallocateRejectReason || 'No reason provided.'"></span>
+                </div>
+            </div>
+
+            <form :action="'/admin/work-orders/' + reallocateOrderId + '/allocate'" method="POST" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Select New Craftsman <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="craftsman_id" required x-model="reallocateCraftsmanId" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- Choose Another Craftsman --</option>
+                        @foreach($craftsmen as $craftsman)
+                            <option value="{{ $craftsman->id }}" :disabled="reallocatePreviousCraftsmanId == {{ $craftsman->id }}">
+                                {{ $craftsman->name }} ({{ $craftsman->mobile }})
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="text-2xs text-slate-400 mt-1">Previous craftsman is disabled to prevent accidental re-assignment.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">New Due Date (Optional)</label>
+                    <input type="date" name="due_date" x-model="reallocateDueDate" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" @click="reallocateModalOpen = false" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-colors">Confirm Reallocation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Return -->
     <div x-show="returnModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div @click.outside="returnModalOpen = false" class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl">
@@ -761,6 +820,15 @@
         return {
             selectedOrders: [],
             allocateModalOpen: false,
+            reallocateModalOpen: false,
+            reallocateOrderId: null,
+            reallocateOrderNo: '',
+            reallocateDesignCode: '',
+            reallocatePreviousCraftsmanId: null,
+            reallocatePreviousCraftsmanName: '',
+            reallocateRejectReason: '',
+            reallocateCraftsmanId: '',
+            reallocateDueDate: '',
             returnModalOpen: false,
             imageModalOpen: false,
             selectedImageUrl: '',
@@ -861,6 +929,17 @@
                 } else {
                     this.selectedOrders = [];
                 }
+            },
+            openReallocateModal(id, no, code, prevCraftsmanId, prevCraftsmanName, rejectReason) {
+                this.reallocateOrderId = id;
+                this.reallocateOrderNo = no;
+                this.reallocateDesignCode = code;
+                this.reallocatePreviousCraftsmanId = prevCraftsmanId;
+                this.reallocatePreviousCraftsmanName = prevCraftsmanName;
+                this.reallocateRejectReason = rejectReason;
+                this.reallocateCraftsmanId = '';
+                this.reallocateDueDate = '';
+                this.reallocateModalOpen = true;
             },
             openAllocateModal(id, no, code) {
                 this.selectedOrderId = id;
