@@ -6,6 +6,21 @@
 <div class="space-y-6 pb-24 lg:pb-0" x-data="{ 
     filterModal: false, 
     activeImageModal: false, 
+    rejectModal: false,
+    rejectOrderId: null,
+    rejectOrderNo: '',
+    rejectActionUrl: '',
+    openRejectModal(id, orderNo) {
+        this.rejectOrderId = id;
+        this.rejectOrderNo = orderNo;
+        this.rejectActionUrl = '{{ url("craftsman/work-orders") }}/' + id + '/reject';
+        this.rejectModal = true;
+    },
+    closeRejectModal() {
+        this.rejectModal = false;
+        this.rejectOrderId = null;
+        this.rejectOrderNo = '';
+    }, 
     currentIndex: 0,
     ordersList: @js($workOrders->items()),
     selectedOrders: [], 
@@ -84,7 +99,9 @@
     <div class="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
         @php
         $tabs = [
+            'allocated'           => ['label' => 'Allocated', 'count' => $counts['allocated'], 'dot' => 'bg-sky-500'],
             'in_process'          => ['label' => 'Order Pending', 'count' => $counts['in_process'], 'dot' => 'bg-orange-500'],
+            'rejected'            => ['label' => 'Rejected', 'count' => $counts['rejected'], 'dot' => 'bg-rose-500'],
             'partially_completed' => ['label' => 'Partially Completed', 'count' => $counts['partially_completed'], 'dot' => 'bg-purple-500'],
             'for_approval'        => ['label' => 'For Approval', 'count' => $counts['for_approval'], 'dot' => 'bg-indigo-400 animate-pulse'],
             'overdue'             => ['label' => 'Overdue', 'count' => $counts['overdue'], 'dot' => 'bg-rose-500'],
@@ -282,6 +299,10 @@
                     <div class="absolute top-2 left-2 right-2 z-10 flex justify-between items-center pointer-events-none">
                         @if($order->status === 'returned')
                         <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-rose-100 text-rose-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-rose-200">QC Defect</span>
+                        @elseif($order->status === 'allocated')
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-sky-100 text-sky-800 font-extrabold rounded-md shadow-xs pointer-events-auto border border-sky-200">Allocated</span>
+                        @elseif($order->status === 'rejected')
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-rose-100 text-rose-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-rose-200">Rejected</span>
                         @elseif($order->status === 'completed')
                         <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-emerald-100 text-emerald-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-emerald-200">Completed</span>
                         @elseif($order->status === 'for_approval')
@@ -328,6 +349,21 @@
                                 <span class="font-semibold">{{ $order->reference_no }}</span>
                                 <span>{{ $order->due_date ? \Carbon\Carbon::parse($order->due_date)->format('d M') : '-' }}</span>
                             </div>
+
+                            @if($order->status === 'allocated')
+                                <div class="flex items-center gap-1.5 pt-2 border-t border-slate-100">
+                                    <button type="button" onclick="submitSingleAction('{{ route('craftsman.work-orders.accept', $order) }}')" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold text-center shadow-xs transition-colors">
+                                        Accept
+                                    </button>
+                                    <button type="button" @click="openRejectModal({{ $order->id }}, '{{ $order->work_order_no ?? $order->reference_no }}')" class="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold text-center shadow-xs transition-colors">
+                                        Reject
+                                    </button>
+                                </div>
+                            @elseif($order->status === 'rejected' && $order->reject_reason)
+                                <div class="pt-2 border-t border-slate-100 text-[10px] text-rose-700 bg-rose-50/50 p-1.5 rounded-lg border border-rose-200">
+                                    <span class="font-bold">Reason:</span> {{ $order->reject_reason }}
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -343,6 +379,9 @@
             <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center flex-wrap gap-3">
                 <div class="flex items-center gap-2">
                     <button type="button" @click="submitBulkAction('{{ route('craftsman.work-orders.bulk-print') }}')" class="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all">Print Selected Slips</button>
+                    @if($currentTab === 'allocated')
+                    <button type="button" @click="submitBulkAction('{{ route('craftsman.work-orders.bulk-accept') }}')" class="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">Bulk Accept Orders</button>
+                    @endif
                     @if(in_array($currentTab, ['all', 'in_process']))
                     <button type="button" @click="submitBulkAction('{{ route('craftsman.work-orders.bulk-submit') }}')" class="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">Bulk Submit for Approval</button>
                     @endif
@@ -396,6 +435,7 @@
                                         'in_process'          => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
                                         'partially_completed' => ['bg' => 'bg-purple-100 text-purple-800 border-purple-200 font-bold', 'dot' => 'bg-purple-500', 'label' => 'Partially Completed'],
                                         'for_approval'        => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
+                                        'rejected'            => ['bg' => 'bg-rose-50 text-rose-700 border-rose-200 font-bold', 'dot' => 'bg-rose-500', 'label' => 'Rejected'],
                                         'returned'            => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'QC Defect'],
                                         'completed'           => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
                                     ];
@@ -405,6 +445,11 @@
                                     <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $st['dot'] }}"></span>
                                     <span>{{ $st['label'] }}@if($order->status === 'returned' && $order->return_count) (x{{ $order->return_count }})@endif</span>
                                 </span>
+                                @if($order->status === 'rejected' && $order->reject_reason)
+                                    <div class="mt-1 text-2xs text-rose-800 bg-rose-50 border border-rose-200 rounded px-1.5 py-1 max-w-[200px] break-words">
+                                        <span class="font-bold">Reason:</span> {{ $order->reject_reason }}
+                                    </div>
+                                @endif
                             </td>
                             <td class="px-4 py-3">
                                 <div class="font-medium text-slate-800">{{ $order->reference_no }}</div>
@@ -434,8 +479,11 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                                @if(in_array($order->status, ['in_process', 'returned', 'partially_completed']))
-                                <button type="button" onclick="if(confirm('Submit this piece for QC inspection?')) { submitSingleAction('{{ route('craftsman.work-orders.submit', $order) }}'); }" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Send Approval</button>
+                                @if($order->status === 'allocated')
+                                    <button type="button" onclick="submitSingleAction('{{ route('craftsman.work-orders.accept', $order) }}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Accept</button>
+                                    <button type="button" @click="openRejectModal({{ $order->id }}, '{{ $order->work_order_no ?? $order->reference_no }}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Reject</button>
+                                @elseif(in_array($order->status, ['in_process', 'returned', 'partially_completed']))
+                                    <button type="button" onclick="if(confirm('Submit this piece for QC inspection?')) { submitSingleAction('{{ route('craftsman.work-orders.submit', $order) }}'); }" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Send Approval</button>
                                 @endif
                                 <a href="{{ route('craftsman.work-orders.show', $order) }}" class="text-slate-500 hover:text-amber-600 text-xs font-bold transition-colors">Details &rarr;</a>
                             </td>
@@ -735,9 +783,39 @@
             </form>
         </div>
     </div>
+
+    <!-- REJECT WORK ORDER MODAL -->
+    <div x-show="rejectModal" x-transition.opacity class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" x-cloak>
+        <div @click.away="closeRejectModal()" class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+            <form :action="rejectActionUrl" method="POST" class="p-6 space-y-4">
+                @csrf
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-900">Reject Work Order</h3>
+                    <button type="button" @click="closeRejectModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Are you sure you want to reject order <span class="font-bold text-slate-800" x-text="rejectOrderNo"></span>? Please specify the reason below.
+                </p>
+                <div>
+                    <label for="reject_reason" class="block text-xs font-bold text-slate-600 uppercase mb-1">
+                        Reason for Rejection <span class="text-rose-500">*</span>
+                    </label>
+                    <textarea name="reject_reason" id="reject_reason" rows="3" required placeholder="e.g. Workshop full, specifications not feasible, design issue..." class="w-full text-sm rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"></textarea>
+                </div>
+                <div class="flex items-center justify-end space-x-2 pt-2">
+                    <button type="button" @click="closeRejectModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md transition-colors">
+                        Confirm Rejection
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
-<!-- SINGLE ACTION FORM FOR JS SUBMISSIONS -->
+    <!-- SINGLE ACTION FORM FOR JS SUBMISSIONS -->
 <form id="singleActionForm" method="POST" class="hidden">
     @csrf
 </form>

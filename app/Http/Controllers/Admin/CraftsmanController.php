@@ -327,12 +327,13 @@ class CraftsmanController extends Controller
 
         if ($allocatedCount > 0) {
             WorkOrder::whereIn('id', $pendingOrders->pluck('id'))->update([
-                'craftsman_id' => $craftsman->id,
-                'status' => 'in_process',
-                'allocated_at' => Carbon::now(),
+                'craftsman_id'  => $craftsman->id,
+                'status'        => 'allocated',
+                'reject_reason' => null,
+                'allocated_at'  => Carbon::now(),
             ]);
         }
 
-        return redirect()->back()->with('success', "{$allocatedCount} orders have been allocated and sent to the In Process tab. {$missingImagesCount} images are not added.");
+        return redirect()->back()->with('success', "{$allocatedCount} orders have been allocated and sent to the Allocated tab. {$missingImagesCount} images are not added.");
     }
 }

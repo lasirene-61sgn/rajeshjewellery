@@ -3,7 +3,7 @@
 @section('title', 'Order ' . $workOrder->work_order_no)
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-6 px-4 sm:px-0">
+<div class="max-w-4xl mx-auto space-y-6 px-4 sm:px-0" x-data="{ rejectModal: false }">
 
     <!-- Header Section -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -12,6 +12,17 @@
             <p class="text-xs text-stone-500 mt-0.5">Work Order Specifications & Details</p>
         </div>
         <div class="flex items-center gap-2.5 w-full sm:w-auto">
+            @if($workOrder->status === 'allocated')
+                <form method="POST" action="{{ route('craftsman.work-orders.accept', $workOrder) }}" class="flex-1 sm:flex-none">
+                    @csrf
+                    <button type="submit" class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                        <span>Accept Order</span>
+                    </button>
+                </form>
+                <button type="button" @click="rejectModal = true" class="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                    <span>Reject Order</span>
+                </button>
+            @endif
             @if(in_array($workOrder->status, ['in_process', 'returned', 'partially_completed']))
                 <form method="POST" action="{{ route('craftsman.work-orders.submit', $workOrder) }}" onsubmit="return confirm('Submit this piece for quality approval?')" class="flex-1 sm:flex-none">
                     @csrf
@@ -24,6 +35,18 @@
             <a href="{{ $backUrl }}" class="px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 shadow-sm transition-all text-center">Back</a>
         </div>
     </div>
+
+    @if($workOrder->status === 'rejected')
+        <div class="p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 shadow-sm">
+            <div class="flex items-center gap-2 text-rose-700 font-bold text-sm">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                Order Rejected by You
+            </div>
+            <p class="text-sm text-rose-900 bg-white/70 p-3 rounded-xl border border-rose-200">
+                <strong>Reason for Rejection:</strong> {{ $workOrder->reject_reason ?? 'No reason specified.' }}
+            </p>
+        </div>
+    @endif
 
     <!-- QC Return Alert if returned -->
     @if($workOrder->status === 'returned')
@@ -147,5 +170,34 @@
         @endif
     </div>
 
+    <!-- REJECT MODAL -->
+    <div x-show="rejectModal" x-transition.opacity class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" x-cloak>
+        <div @click.away="rejectModal = false" class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+            <form action="{{ route('craftsman.work-orders.reject', $workOrder) }}" method="POST" class="p-6 space-y-4">
+                @csrf
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-900">Reject Work Order</h3>
+                    <button type="button" @click="rejectModal = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Are you sure you want to reject order <span class="font-bold text-slate-800">#{{ $workOrder->reference_no ?? $workOrder->work_order_no }}</span>? Please state the reason below.
+                </p>
+                <div>
+                    <label for="reject_reason" class="block text-xs font-bold text-slate-600 uppercase mb-1">
+                        Reason for Rejection <span class="text-rose-500">*</span>
+                    </label>
+                    <textarea name="reject_reason" id="reject_reason" rows="3" required placeholder="e.g. Schedule full, cannot manufacture as specified..." class="w-full text-sm rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"></textarea>
+                </div>
+                <div class="flex items-center justify-end space-x-2 pt-2">
+                    <button type="button" @click="rejectModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md transition-colors">
+                        Confirm Rejection
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 @endsection

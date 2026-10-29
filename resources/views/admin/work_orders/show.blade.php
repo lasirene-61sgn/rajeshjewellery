@@ -14,6 +14,18 @@
         </a>
     </div>
 
+    @if($workOrder->status === 'rejected')
+        <div class="p-5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 shadow-sm">
+            <div class="flex items-center gap-2 text-rose-700 font-bold text-sm">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                Order Rejected by Craftsman ({{ optional($workOrder->craftsman)->name ?? 'Assigned Craftsman' }})
+            </div>
+            <p class="text-sm text-rose-900 bg-white/80 p-3 rounded-xl border border-rose-200">
+                <strong>Reason for Rejection:</strong> {{ $workOrder->reject_reason ?? 'No reason provided.' }}
+            </p>
+        </div>
+    @endif
+
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-6">
         @if($workOrder->design_image)
             <div>

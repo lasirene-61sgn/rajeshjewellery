@@ -89,9 +89,11 @@ Route::prefix('craftsman')->name('craftsman.')->middleware(['web', 'auth:craftsm
     Route::get('work-orders', [CraftsmanWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('work-orders/{workOrder}', [CraftsmanWorkOrderController::class, 'show'])->name('work-orders.show');
     Route::post('work-orders/{workOrder}/accept', [CraftsmanWorkOrderController::class, 'accept'])->name('work-orders.accept');
+    Route::post('work-orders/{workOrder}/reject', [CraftsmanWorkOrderController::class, 'reject'])->name('work-orders.reject');
     Route::post('work-orders/{workOrder}/submit', [CraftsmanWorkOrderController::class, 'submitForApproval'])->name('work-orders.submit');
     Route::post('work-orders/bulk-print', [CraftsmanWorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
     Route::post('work-orders/bulk-accept', [CraftsmanWorkOrderController::class, 'bulkAccept'])->name('work-orders.bulk-accept');
+    Route::post('work-orders/bulk-reject', [CraftsmanWorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
     Route::post('work-orders/bulk-submit', [CraftsmanWorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
 
     Route::get('orders', [CraftsmanOrderController::class, 'index'])->name('orders.index');

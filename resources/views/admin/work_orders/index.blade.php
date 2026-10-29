@@ -84,6 +84,13 @@
                         'active' => 'border-sky-500 text-sky-900 bg-sky-50/80',
                         'badge_active' => 'bg-sky-500 text-white font-bold',
                     ],
+                    'rejected' => [
+                        'label' => 'Rejected',
+                        'count' => $counts['rejected'],
+                        'dot' => 'bg-rose-500',
+                        'active' => 'border-rose-500 text-rose-900 bg-rose-50/80',
+                        'badge_active' => 'bg-rose-500 text-white font-bold',
+                    ],
                     'in_process' => [
                         'label' => 'In Process',
                         'count' => $counts['in_process'],
@@ -564,6 +571,10 @@
                                             @csrf
                                             <button type="submit" class="text-xs text-rose-600 hover:underline">Undo</button>
                                         </form>
+                                    @elseif($order->status === 'rejected')
+                                        <button @click="openAllocateModal({{ $order->id }}, '{{ $order->work_order_no }}', '{{ $order->design_code }}')" class="text-xs font-semibold text-indigo-600 hover:underline block mt-0.5">
+                                            + Reassign
+                                        </button>
                                     @endif
                                 @else
                                     <button @click="openAllocateModal({{ $order->id }}, '{{ $order->work_order_no }}', '{{ $order->design_code }}')" class="text-xs font-semibold text-indigo-600 hover:underline">
@@ -580,6 +591,7 @@
                                         'in_process'          => ['bg' => 'bg-orange-50 text-orange-700 border-orange-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
                                         'partially_completed' => ['bg' => 'bg-purple-100 text-purple-800 border-purple-200 font-bold', 'dot' => 'bg-purple-500', 'label' => 'Partially Completed'],
                                         'for_approval'        => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
+                                        'rejected'            => ['bg' => 'bg-rose-50 text-rose-700 border-rose-200 font-bold', 'dot' => 'bg-rose-500', 'label' => 'Rejected'],
                                         'returned'            => ['bg' => 'bg-red-50 text-red-800 border-red-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
                                         'completed'           => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
                                     ];
@@ -589,6 +601,11 @@
                                     <span class="w-2 h-2 rounded-full shrink-0 {{ $st['dot'] }}"></span>
                                     <span>{{ $st['label'] }}@if($order->status === 'returned') (x{{ $order->return_count }})@endif</span>
                                 </span>
+                                @if($order->status === 'rejected' && $order->reject_reason)
+                                    <div class="mt-1 text-2xs text-rose-800 bg-rose-50 border border-rose-200 rounded px-1.5 py-1 max-w-[200px] break-words">
+                                        <span class="font-bold">Reason:</span> {{ $order->reject_reason }}
+                                    </div>
+                                @endif
                             </td>
 
                             <td class="px-4 py-3 text-xs">

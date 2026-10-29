@@ -227,6 +227,7 @@ class WorkOrderController extends Controller
             'pending' => $query->where('status', 'pending'),
             'allocated' => $query->where('status', 'allocated'),
             'in_process' => $query->where('status', 'in_process'),
+            'rejected' => $query->where('status', 'rejected'),
             'partially_completed' => $query->where('status', 'partially_completed'),
             'returned' => $query->where('status', 'returned'),
             'for_approval' => $query->where('status', 'for_approval'),
@@ -241,6 +242,7 @@ class WorkOrderController extends Controller
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
             'allocated' => (clone $baseQuery)->where('status', 'allocated')->count(),
             'in_process' => (clone $baseQuery)->where('status', 'in_process')->count(),
+            'rejected' => (clone $baseQuery)->where('status', 'rejected')->count(),
             'partially_completed' => (clone $baseQuery)->where('status', 'partially_completed')->count(),
             'returned' => (clone $baseQuery)->where('status', 'returned')->count(),
             'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
@@ -446,16 +448,11 @@ class WorkOrderController extends Controller
             'craftsman_id' => ['required', 'exists:craftsmen,id'],
         ]);
 
-        $status = 'allocated';
-        $designCodeModel = DesignCode::with('craftsmen')->where('code', $workOrder->design_code)->first();
-        if ($designCodeModel && $designCodeModel->craftsmen->contains('id', $request->craftsman_id)) {
-            $status = 'in_process';
-        }
-
         $workOrder->update([
-            'craftsman_id' => $request->craftsman_id,
-            'status' => $status,
-            'allocated_at' => Carbon::now(),
+            'craftsman_id'  => $request->craftsman_id,
+            'status'        => 'allocated',
+            'reject_reason' => null,
+            'allocated_at'  => Carbon::now(),
         ]);
 
         return back()->with('success', "Order {$workOrder->work_order_no} allocated to craftsman.");
@@ -473,16 +470,11 @@ class WorkOrderController extends Controller
         $orders = WorkOrder::whereIn('id', $request->order_ids)->get();
 
         foreach ($orders as $workOrder) {
-            $status = 'allocated';
-            $designCodeModel = DesignCode::with('craftsmen')->where('code', $workOrder->design_code)->first();
-            if ($designCodeModel && $designCodeModel->craftsmen->contains('id', $request->craftsman_id)) {
-                $status = 'in_process';
-            }
-
             $updateData = [
-                'craftsman_id' => $request->craftsman_id,
-                'status' => $status,
-                'allocated_at' => Carbon::now(),
+                'craftsman_id'  => $request->craftsman_id,
+                'status'        => 'allocated',
+                'reject_reason' => null,
+                'allocated_at'  => Carbon::now(),
             ];
 
             if ($request->filled('due_date')) {

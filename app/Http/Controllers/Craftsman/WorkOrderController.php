@@ -73,6 +73,7 @@ class WorkOrderController extends Controller
             'all'                 => null,
             'allocated'           => $query->where('status', 'allocated'),
             'in_process'          => $query->whereIn('status', ['in_process', 'returned']),
+            'rejected'            => $query->where('status', 'rejected'),
             'partially_completed' => $query->where('status', 'partially_completed'),
             'returned'            => $query->where('status', 'returned'),
             'for_approval'        => $query->where('status', 'for_approval'),
@@ -91,6 +92,7 @@ class WorkOrderController extends Controller
             'all'                 => (clone $baseQuery)->count(),
             'allocated'           => (clone $baseQuery)->where('status', 'allocated')->count(),
             'in_process'          => (clone $baseQuery)->whereIn('status', ['in_process', 'returned'])->count(),
+            'rejected'            => (clone $baseQuery)->where('status', 'rejected')->count(),
             'partially_completed' => (clone $baseQuery)->where('status', 'partially_completed')->count(),
             'for_approval'        => (clone $baseQuery)->where('status', 'for_approval')->count(),
             'completed'           => (clone $baseQuery)->where('status', 'completed')->count(),
@@ -164,6 +166,44 @@ class WorkOrderController extends Controller
             ]);
 
         return back()->with('success', "Successfully accepted {$updated} work order(s).");
+    }
+
+    public function reject(Request $request, WorkOrder $workOrder): RedirectResponse
+    {
+        if ($workOrder->craftsman_id !== Auth::guard('craftsman')->id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'reject_reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $workOrder->update([
+            'status'        => 'rejected',
+            'reject_reason' => $request->reject_reason,
+        ]);
+
+        return back()->with('success', "Order {$workOrder->work_order_no} has been rejected.");
+    }
+
+    public function bulkReject(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'order_ids'     => ['required', 'array'],
+            'order_ids.*'   => ['exists:work_orders,id'],
+            'reject_reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $craftsmanId = Auth::guard('craftsman')->id();
+        $updated = WorkOrder::where('craftsman_id', $craftsmanId)
+            ->whereIn('id', $request->order_ids)
+            ->where('status', 'allocated')
+            ->update([
+                'status'        => 'rejected',
+                'reject_reason' => $request->reject_reason,
+            ]);
+
+        return back()->with('success', "Successfully rejected {$updated} work order(s).");
     }
 
     public function submitForApproval(Request $request, WorkOrder $workOrder): RedirectResponse

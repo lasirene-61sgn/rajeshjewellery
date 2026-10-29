@@ -48,6 +48,7 @@ class WorkOrder extends Model
         'completed_at',
         'approved_at',
         'return_reason',
+        'reject_reason',
         'return_image',
         'return_due_date',
         'return_count',
