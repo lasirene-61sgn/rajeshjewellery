@@ -84,26 +84,12 @@
                         'active' => 'border-sky-500 text-sky-900 bg-sky-50/80',
                         'badge_active' => 'bg-sky-500 text-white font-bold',
                     ],
-                    'rejected' => [
-                        'label' => 'Rejected',
-                        'count' => $counts['rejected'],
-                        'dot' => 'bg-rose-500',
-                        'active' => 'border-rose-500 text-rose-900 bg-rose-50/80',
-                        'badge_active' => 'bg-rose-500 text-white font-bold',
-                    ],
                     'in_process' => [
                         'label' => 'In Process',
                         'count' => $counts['in_process'],
                         'dot' => 'bg-orange-500',
                         'active' => 'border-orange-500 text-orange-900 bg-orange-50/80',
                         'badge_active' => 'bg-orange-500 text-orange font-bold',
-                    ],
-                    'returned' => [
-                        'label' => 'Returned',
-                        'count' => $counts['returned'],
-                        'dot' => 'bg-red-500',
-                        'active' => 'border-red-500 text-red-900 bg-rose-50/80',
-                        'badge_active' => 'bg-red-500 text-white font-bold',
                     ],
                     'partially_completed' => [
                         'label' => 'Partially Completed',
@@ -126,6 +112,23 @@
                         'active' => 'border-emerald-500 text-emerald-900 bg-emerald-50/80',
                         'badge_active' => 'bg-emerald-500 text-white font-bold',
                     ],
+                    'rejected' => [
+                        'label' => 'Rejected',
+                        'count' => $counts['rejected'],
+                        'dot' => 'bg-rose-500',
+                        'active' => 'border-rose-500 text-rose-900 bg-rose-50/80',
+                        'badge_active' => 'bg-rose-500 text-white font-bold',
+                    ],
+                    
+                    'returned' => [
+                        'label' => 'Returned',
+                        'count' => $counts['returned'],
+                        'dot' => 'bg-red-500',
+                        'active' => 'border-red-500 text-red-900 bg-rose-50/80',
+                        'badge_active' => 'bg-red-500 text-white font-bold',
+                    ],
+                    
+                    
                     'overdue' => [
                         'label' => 'Overdue',
                         'count' => $counts['overdue'],
@@ -366,11 +369,10 @@
         </form>
     </div>
 
-    <!-- Bulk Allocation Bar -->
-    <!-- Bulk Allocation Bar -->
+    <!-- Bulk Actions Bar -->
     <div x-show="selectedOrders.length > 0" x-cloak class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
         <div class="flex items-center text-xs font-semibold text-indigo-900">
-            <span x-text="selectedOrders.length" class="mr-1 font-bold text-sm"></span> orders selected for bulk allocation
+            <span x-text="selectedOrders.length" class="mr-1 font-bold text-sm"></span> orders selected
         </div>
         <div class="flex flex-wrap items-center gap-4">
             @if(in_array($currentTab, ['pending', 'returned', 'rejected']))
@@ -396,6 +398,15 @@
                         {{ $currentTab === 'rejected' ? 'Reallocate Selected' : 'Allocate Selected' }}
                     </button>
                 </form>
+            @endif
+
+            @if($currentTab === 'pending')
+                <button type="button" @click="openBulkRejectModal()" class="inline-flex items-center px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Bulk Reject
+                </button>
             @endif
 
             @if(in_array($currentTab, ['allocated', 'in_process', 'partially_completed', 'for_approval']))
@@ -633,6 +644,12 @@
                                     </button>
                                 @endif
 
+                                @if($order->status === 'pending')
+                                    <button type="button" @click="openSingleRejectModal({{ $order->id }}, '{{ $order->work_order_no }}')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 rounded text-xs font-semibold transition-colors">
+                                        Reject
+                                    </button>
+                                @endif
+
                                 <a href="{{ route('admin.work_orders.print', $order) }}" target="_blank" class="text-slate-500 hover:text-slate-800 text-xs font-medium">
                                     Print
                                 </a>
@@ -730,7 +747,7 @@
                 <div class="text-xs font-bold text-rose-800 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-rose-600"></span>
                     <span>Rejected By:</span>
-                    <span class="text-rose-900 font-extrabold" x-text="reallocatePreviousCraftsmanName || 'Craftsman'"></span>
+                    <span class="text-rose-900 font-extrabold" x-text="reallocatePreviousCraftsmanName || 'Admin'"></span>
                 </div>
                 <div class="text-xs text-rose-800 bg-white/70 p-2 rounded-lg border border-rose-200/60">
                     <span class="font-bold">Reason:</span>
@@ -747,7 +764,7 @@
                     <select name="craftsman_id" required x-model="reallocateCraftsmanId" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-indigo-500">
                         <option value="">-- Choose Another Craftsman --</option>
                         @foreach($craftsmen as $craftsman)
-                            <option value="{{ $craftsman->id }}" :disabled="reallocatePreviousCraftsmanId == {{ $craftsman->id }}">
+                            <option value="{{ $craftsman->id }}" :disabled="reallocatePreviousCraftsmanId && reallocatePreviousCraftsmanId == {{ $craftsman->id }}">
                                 {{ $craftsman->name }} ({{ $craftsman->mobile }})
                             </option>
                         @endforeach
@@ -763,6 +780,60 @@
                 <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
                     <button type="button" @click="reallocateModalOpen = false" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
                     <button type="submit" class="px-4 py-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-colors">Confirm Reallocation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Reject (Single & Bulk) -->
+    <div x-show="rejectModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.outside="closeRejectModal()" class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900" x-text="rejectIsBulk ? 'Bulk Reject Work Orders' : 'Reject Work Order'"></h3>
+                        <p class="text-xs text-slate-500 font-mono" x-show="!rejectIsBulk" x-text="'#' + rejectOrderNo"></p>
+                        <p class="text-xs text-slate-500 font-medium" x-show="rejectIsBulk" x-text="selectedOrders.length + ' pending order(s) selected'"></p>
+                    </div>
+                </div>
+                <button type="button" @click="closeRejectModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">
+                <span x-show="rejectIsBulk">Are you sure you want to reject <span class="font-bold text-slate-900" x-text="selectedOrders.length"></span> selected pending order(s)? They will be moved to the Rejected tab and will not be visible in craftsman portal.</span>
+                <span x-show="!rejectIsBulk">Are you sure you want to reject order <span class="font-bold text-slate-900" x-text="'#' + rejectOrderNo"></span>? It will be moved to the Rejected tab and will not be visible in craftsman portal.</span>
+            </p>
+
+            <form :action="rejectIsBulk ? '{{ route('admin.work_orders.bulk-reject') }}' : ('/admin/work-orders/' + rejectOrderId + '/reject')" method="POST" class="space-y-4">
+                @csrf
+                <template x-if="rejectIsBulk">
+                    <div>
+                        <template x-for="id in selectedOrders" :key="id">
+                            <input type="hidden" name="order_ids[]" :value="id">
+                        </template>
+                    </div>
+                </template>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">
+                        Reason for Rejection <span class="text-slate-400 font-normal lowercase">(optional)</span>
+                    </label>
+                    <textarea name="reject_reason" x-model="rejectReason" rows="3" placeholder="e.g. Cancelled by customer, specifications invalid... (defaults to 'Rejected by Admin')" class="w-full text-xs rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors"></textarea>
+                    <p class="text-3xs text-slate-400 mt-1">If left blank, 'Rejected by Admin' will be saved automatically.</p>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" @click="closeRejectModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors">
+                        Confirm Rejection
+                    </button>
                 </div>
             </form>
         </div>
@@ -821,6 +892,11 @@
             selectedOrders: [],
             allocateModalOpen: false,
             reallocateModalOpen: false,
+            rejectModalOpen: false,
+            rejectIsBulk: false,
+            rejectOrderId: null,
+            rejectOrderNo: '',
+            rejectReason: '',
             reallocateOrderId: null,
             reallocateOrderNo: '',
             reallocateDesignCode: '',
@@ -961,6 +1037,28 @@
                 this.selectedImageUrl = url;
                 this.selectedImageHasSeal = hasSeal;
                 this.imageModalOpen = true;
+            },
+            openSingleRejectModal(id, no) {
+                this.rejectIsBulk = false;
+                this.rejectOrderId = id;
+                this.rejectOrderNo = no;
+                this.rejectReason = '';
+                this.rejectModalOpen = true;
+            },
+            openBulkRejectModal() {
+                if (this.selectedOrders.length === 0) return;
+                this.rejectIsBulk = true;
+                this.rejectOrderId = null;
+                this.rejectOrderNo = '';
+                this.rejectReason = '';
+                this.rejectModalOpen = true;
+            },
+            closeRejectModal() {
+                this.rejectModalOpen = false;
+                this.rejectIsBulk = false;
+                this.rejectOrderId = null;
+                this.rejectOrderNo = '';
+                this.rejectReason = '';
             }
         }
     }

@@ -35,6 +35,7 @@ class WorkOrdersExport implements FromCollection, ShouldAutoSize, WithColumnForm
             'Weight',
             'Length',
             'Qty',
+            'Craftsman'
         ];
     }
 
@@ -50,6 +51,7 @@ class WorkOrdersExport implements FromCollection, ShouldAutoSize, WithColumnForm
             $row->target_weight !== null ? (float) $row->target_weight : null,
             $row->length ?: ($row->size ?: '-'),
             $row->quantity ?? null,
+            $row->craftsman?->name ?? '-',
         ];
     }
 
@@ -65,6 +67,7 @@ class WorkOrdersExport implements FromCollection, ShouldAutoSize, WithColumnForm
             'D' => '#,##0.000',
             'E' => NumberFormat::FORMAT_TEXT,
             'F' => NumberFormat::FORMAT_NUMBER,
+            'G' => NumberFormat::FORMAT_TEXT,
         ];
     }
 

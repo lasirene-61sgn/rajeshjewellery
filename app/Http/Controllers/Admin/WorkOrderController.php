@@ -505,6 +505,48 @@ class WorkOrderController extends Controller
         return back()->with('success', count($request->order_ids) . ' work orders successfully allocated.');
     }
 
+    public function bulkReject(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'order_ids'     => ['required', 'array'],
+            'order_ids.*'   => ['exists:work_orders,id'],
+            'reject_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $reason = $request->filled('reject_reason') ? trim($request->reject_reason) : 'Rejected by Admin';
+
+        $orders = WorkOrder::whereIn('id', $request->order_ids)
+            ->where('status', 'pending')
+            ->get();
+
+        foreach ($orders as $workOrder) {
+            $workOrder->update([
+                'status'        => 'rejected',
+                'craftsman_id'  => null,
+                'reject_reason' => $reason,
+            ]);
+        }
+
+        return back()->with('success', count($orders) . ' work orders successfully rejected.');
+    }
+
+    public function reject(Request $request, WorkOrder $workOrder): RedirectResponse
+    {
+        $request->validate([
+            'reject_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $reason = $request->filled('reject_reason') ? trim($request->reject_reason) : 'Rejected by Admin';
+
+        $workOrder->update([
+            'status'        => 'rejected',
+            'craftsman_id'  => null,
+            'reject_reason' => $reason,
+        ]);
+
+        return back()->with('success', "Order {$workOrder->work_order_no} has been rejected.");
+    }
+
     public function undoAllocation(WorkOrder $workOrder): RedirectResponse
     {
         if ($workOrder->status !== 'allocated') {
@@ -658,6 +700,7 @@ class WorkOrderController extends Controller
                         ->orWhere('design_code', 'like', "%{$search}%")
                         ->orWhere('design_nickname', 'like', "%{$search}%")
                         ->orWhere('seal', 'like', "%{$search}%")
+                        ->orWhere('craftsman_id', 'like', "%{$search}%")
                         ->orWhereExists(function ($sub) use ($search) {
                             $sub->select(DB::raw(1))
                                 ->from('design_codes')

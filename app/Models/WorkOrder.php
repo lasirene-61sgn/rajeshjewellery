@@ -105,7 +105,7 @@ class WorkOrder extends Model
 
     public function craftsman(): BelongsTo
     {
-        return $this->belongsTo(Craftsman::class);
+        return $this->belongsTo(Craftsman::class, 'craftsman_id');
     }
 
     public function scopePending(Builder $query): Builder
