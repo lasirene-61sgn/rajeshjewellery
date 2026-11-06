@@ -65,6 +65,7 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     Route::post('work-orders/{workOrder}/return', [AdminWorkOrderController::class, 'returnOrder'])->name('work_orders.return');
     Route::post('work-orders/{workOrder}/approve', [AdminWorkOrderController::class, 'approve'])->name('work_orders.approve');
     Route::post('work-orders/{workOrder}/update-quantity', [AdminWorkOrderController::class, 'updateQuantity'])->name('work_orders.update-quantity');
+    Route::post('work-orders/{workOrder}/undo-completion', [AdminWorkOrderController::class, 'undoCompletion'])->name('work_orders.undo-completion');
 
     Route::resource('work-orders', AdminWorkOrderController::class)->names('work_orders');
 

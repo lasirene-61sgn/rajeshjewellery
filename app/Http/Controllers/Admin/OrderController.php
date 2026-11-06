@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreOrderRequest;
 use App\Http\Requests\Admin\UpdateOrderRequest;
-use App\Models\Order;
 use App\Models\Craftsman;
+use App\Models\Order;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -49,22 +50,66 @@ class OrderController extends Controller
             $data['image'] = $request->file('image')->store('orders', 'public');
         }
 
-        // If craftsman is chosen during creation, set status to 'allocated'
         if (!empty($data['craftsman_id'])) {
             $data['status'] = 'allocated';
         } else {
-            // Otherwise default to pending and ensure craftsman_id is null
             $data['status'] = 'pending';
             $data['craftsman_id'] = null;
         }
 
-        Order::create($data);
+        $order = Order::create($data);
+
+        $order->logActivity(
+            action: 'created',
+            note: "Order #{$order->reference_number} created with quantity {$order->quantity}.",
+            details: [
+                'reference_number' => $order->reference_number,
+                'product_name'     => $order->product_name,
+                'quantity'         => $order->quantity,
+                'due_date'         => optional($order->due_date)->format('Y-m-d'),
+            ]
+        );
+
+        if (!empty($data['craftsman_id'])) {
+            $craftsman = Craftsman::find($data['craftsman_id']);
+            $order->logActivity(
+                action: 'allocated',
+                note: "Order allocated to Craftsman: {$craftsman?->name}",
+                details: [
+                    'craftsman_id'   => $craftsman?->id,
+                    'craftsman_name' => $craftsman?->name,
+                ]
+            );
+        }
 
         return redirect()->route('admin.orders.index')->with('success', 'Order created successfully.');
     }
 
     public function show(Order $order)
     {
+        // Check overdue if due_date is past and not completed
+        if ($order->status !== 'completed' && $order->due_date && Carbon::parse($order->due_date)->lt(Carbon::today('Asia/Kolkata'))) {
+            $dueDateStr = Carbon::parse($order->due_date)->format('Y-m-d');
+            $alreadyLogged = $order->logs()
+                ->where('action', 'overdue')
+                ->where('details->due_date', $dueDateStr)
+                ->exists();
+
+            if (!$alreadyLogged) {
+                $order->logActivity(
+                    action: 'overdue',
+                    note: "Order became overdue. (Due date was " . Carbon::parse($order->due_date)->format('d M Y') . ").",
+                    details: ['due_date' => $dueDateStr],
+                    actorType: 'system',
+                    actorName: 'System'
+                );
+            }
+        }
+
+        $order->load(['craftsman', 'logs' => function ($q) {
+            $q->orderBy('created_at', 'asc')->orderBy('id', 'asc');
+        }]);
+
         return view('admin.orders.show', compact('order'));
     }
 
@@ -85,7 +130,8 @@ class OrderController extends Controller
             $data['image'] = $request->file('image')->store('orders', 'public');
         }
 
-        // Handle allocation status changes correctly
+        $oldCraftsmanId = $order->craftsman_id;
+
         if (!empty($data['craftsman_id'])) {
             $data['status'] = 'allocated';
         } else {
@@ -94,6 +140,23 @@ class OrderController extends Controller
         }
 
         $order->update($data);
+
+        if (!empty($data['craftsman_id']) && $data['craftsman_id'] != $oldCraftsmanId) {
+            $craftsman = Craftsman::find($data['craftsman_id']);
+            $order->logActivity(
+                action: 'allocated',
+                note: "Craftsman updated/allocated to: {$craftsman?->name}",
+                details: [
+                    'craftsman_id'   => $craftsman?->id,
+                    'craftsman_name' => $craftsman?->name,
+                ]
+            );
+        } else {
+            $order->logActivity(
+                action: 'updated',
+                note: "Order details updated by Admin.",
+            );
+        }
 
         return redirect()->route('admin.orders.index')->with('success', 'Order updated successfully.');
     }
@@ -106,8 +169,18 @@ class OrderController extends Controller
 
         $order->update([
             'craftsman_id' => $request->craftsman_id,
-            'status' => 'allocated' // Forces status to allocated when assigned
+            'status' => 'allocated'
         ]);
+
+        $craftsman = Craftsman::find($request->craftsman_id);
+        $order->logActivity(
+            action: 'allocated',
+            note: "Order allocated to Craftsman: {$craftsman?->name}",
+            details: [
+                'craftsman_id'   => $craftsman?->id,
+                'craftsman_name' => $craftsman?->name,
+            ]
+        );
 
         return back()->with('success', 'Order allocated to craftsman successfully.');
     }
@@ -117,6 +190,11 @@ class OrderController extends Controller
         $order->update([
             'status' => 'completed'
         ]);
+
+        $order->logActivity(
+            action: 'force_completed',
+            note: "Order marked as Force Completed by Admin.",
+        );
 
         return back()->with('success', 'Order has been marked as completed by Admin.');
     }

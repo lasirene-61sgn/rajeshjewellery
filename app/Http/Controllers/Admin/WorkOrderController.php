@@ -200,12 +200,12 @@ class WorkOrderController extends Controller
         if ($request->filled('nickname')) {
             $nickFilter = trim($request->nickname);
             $query->where(function ($q) use ($nickFilter) {
-                $q->where('design_nickname', 'like', "%{$nickFilter}%")
+                $q->where('design_nickname', $nickFilter)
                     ->orWhereExists(function ($sub) use ($nickFilter) {
                         $sub->select(DB::raw(1))
                             ->from('design_codes')
                             ->whereColumn('design_codes.code', 'work_orders.design_code')
-                            ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                            ->where('design_codes.nickname', $nickFilter);
                     });
             });
         }
@@ -345,7 +345,20 @@ class WorkOrderController extends Controller
             );
         }
 
-        WorkOrder::create($validated);
+        $workOrder = WorkOrder::create($validated);
+
+        $workOrder->logActivity(
+            action: 'created',
+            note: "Work order created with quantity {$workOrder->quantity} {$workOrder->unit_type}, target weight " . number_format($workOrder->target_weight, 3) . "g.",
+            details: [
+                'work_order_no' => $workOrder->work_order_no,
+                'reference_no' => $workOrder->reference_no,
+                'quantity' => $workOrder->quantity,
+                'unit_type' => $workOrder->unit_type,
+                'target_weight' => $workOrder->target_weight,
+                'due_date' => optional($workOrder->due_date)->format('Y-m-d'),
+            ]
+        );
 
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
 
@@ -354,10 +367,46 @@ class WorkOrderController extends Controller
 
     public function show(Request $request, WorkOrder $workOrder): View
     {
-        $workOrder->load('craftsman');
+        $this->checkAndLogOverdue($workOrder);
+
+        $workOrder->load(['craftsman', 'logs' => function ($q) {
+            $q->orderBy('created_at', 'asc')->orderBy('id', 'asc');
+        }]);
+
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
 
         return view('admin.work_orders.show', compact('workOrder', 'backUrl'));
+    }
+
+    protected function checkAndLogOverdue(WorkOrder $workOrder): void
+    {
+        if ($workOrder->status === 'completed') {
+            return;
+        }
+
+        $today = Carbon::today('Asia/Kolkata');
+        $effectiveDueDate = $workOrder->return_due_date ?? $workOrder->due_date;
+
+        if ($effectiveDueDate && Carbon::parse($effectiveDueDate)->lt($today)) {
+            $dueDateStr = Carbon::parse($effectiveDueDate)->format('Y-m-d');
+            $alreadyLogged = $workOrder->logs()
+                ->where('action', 'overdue')
+                ->where('details->due_date', $dueDateStr)
+                ->exists();
+
+            if (!$alreadyLogged) {
+                $workOrder->logActivity(
+                    action: 'overdue',
+                    note: "Work order became overdue. (Due date was " . Carbon::parse($effectiveDueDate)->format('d M Y') . ").",
+                    details: [
+                        'due_date' => $dueDateStr,
+                        'is_return_due_date' => !empty($workOrder->return_due_date),
+                    ],
+                    actorType: 'system',
+                    actorName: 'System'
+                );
+            }
+        }
     }
 
     public function edit(Request $request, WorkOrder $workOrder): View
@@ -464,6 +513,18 @@ class WorkOrderController extends Controller
 
         $workOrder->update($updateData);
 
+        $craftsman = Craftsman::find($request->craftsman_id);
+        $action = $isReallocate ? 'reallocated' : 'allocated';
+        $workOrder->logActivity(
+            action: $action,
+            note: ($isReallocate ? 'Reallocated' : 'Allocated') . " to Craftsman: {$craftsman?->name}" . ($request->filled('due_date') ? " (Due Date: " . Carbon::parse($request->due_date)->format('d M Y') . ")" : ""),
+            details: [
+                'craftsman_id'   => $craftsman?->id,
+                'craftsman_name' => $craftsman?->name,
+                'due_date'       => $request->due_date ?? optional($workOrder->due_date)->format('Y-m-d'),
+            ]
+        );
+
         $msg = $isReallocate
             ? "Order {$workOrder->work_order_no} reallocated to craftsman successfully."
             : "Order {$workOrder->work_order_no} allocated to craftsman.";
@@ -485,6 +546,7 @@ class WorkOrderController extends Controller
             'due_date' => ['nullable', 'date'],
         ]);
 
+        $craftsman = Craftsman::find($request->craftsman_id);
         $orders = WorkOrder::whereIn('id', $request->order_ids)->get();
 
         foreach ($orders as $workOrder) {
@@ -500,6 +562,16 @@ class WorkOrderController extends Controller
             }
 
             $workOrder->update($updateData);
+
+            $workOrder->logActivity(
+                action: 'allocated',
+                note: "Allocated to Craftsman: {$craftsman?->name} via Bulk Action" . ($request->filled('due_date') ? " (Due Date: " . Carbon::parse($request->due_date)->format('d M Y') . ")" : ""),
+                details: [
+                    'craftsman_id'   => $craftsman?->id,
+                    'craftsman_name' => $craftsman?->name,
+                    'due_date'       => $request->due_date ?? optional($workOrder->due_date)->format('Y-m-d'),
+                ]
+            );
         }
 
         return back()->with('success', count($request->order_ids) . ' work orders successfully allocated.');
@@ -525,6 +597,12 @@ class WorkOrderController extends Controller
                 'craftsman_id'  => null,
                 'reject_reason' => $reason,
             ]);
+
+            $workOrder->logActivity(
+                action: 'rejected',
+                note: "Rejected by Admin. Reason: {$reason}",
+                details: ['reason' => $reason]
+            );
         }
 
         return back()->with('success', count($orders) . ' work orders successfully rejected.');
@@ -544,6 +622,12 @@ class WorkOrderController extends Controller
             'reject_reason' => $reason,
         ]);
 
+        $workOrder->logActivity(
+            action: 'rejected',
+            note: "Rejected by Admin. Reason: {$reason}",
+            details: ['reason' => $reason]
+        );
+
         return back()->with('success', "Order {$workOrder->work_order_no} has been rejected.");
     }
 
@@ -553,11 +637,19 @@ class WorkOrderController extends Controller
             return back()->withErrors(['error' => 'Cannot undo allocation once work has started.']);
         }
 
+        $prevName = optional($workOrder->craftsman)->name;
+
         $workOrder->update([
             'craftsman_id' => null,
             'status' => 'pending',
             'allocated_at' => null,
         ]);
+
+        $workOrder->logActivity(
+            action: 'undo_allocation',
+            note: "Allocation undone by Admin. Removed from craftsman ({$prevName}) and returned to Pending.",
+            details: ['previous_craftsman' => $prevName]
+        );
 
         return back()->with('success', "Allocation cleared for {$workOrder->work_order_no}.");
     }
@@ -570,11 +662,13 @@ class WorkOrderController extends Controller
             'return_image' => ['nullable', 'image', 'max:4096'],
         ]);
 
+        $newReturnCount = ($workOrder->return_count ?? 0) + 1;
+
         $data = [
             'status' => 'returned',
             'return_due_date' => $request->return_due_date,
             'return_reason' => $request->return_reason,
-            'return_count' => ($workOrder->return_count ?? 0) + 1,
+            'return_count' => $newReturnCount,
         ];
 
         if ($request->hasFile('return_image')) {
@@ -582,6 +676,19 @@ class WorkOrderController extends Controller
         }
 
         $workOrder->update($data);
+
+        $craftsmanName = optional($workOrder->craftsman)->name ?? 'Craftsman';
+        $workOrder->logActivity(
+            action: 'returned',
+            note: "Returned to {$craftsmanName} for rework (Return #{$newReturnCount}). Due: " . Carbon::parse($request->return_due_date)->format('d M Y') . ". Reason: {$request->return_reason}",
+            details: [
+                'return_count'    => $newReturnCount,
+                'return_due_date' => $request->return_due_date,
+                'return_reason'   => $request->return_reason,
+                'craftsman_name'  => $craftsmanName,
+            ],
+            attemptNumber: $newReturnCount
+        );
 
         return back()->with('success', "Order {$workOrder->work_order_no} returned to craftsman for rework.");
     }
@@ -593,6 +700,15 @@ class WorkOrderController extends Controller
             'status' => 'completed',
             'approved_at' => Carbon::now(),
         ]);
+
+        $workOrder->logActivity(
+            action: 'completed',
+            note: "Order approved by Admin and marked fully completed ({$workOrder->quantity}/{$workOrder->quantity} pieces).",
+            details: [
+                'completed_quantity' => $workOrder->quantity,
+                'total_quantity'     => $workOrder->quantity,
+            ]
+        );
 
         return back()->with('success', "Order {$workOrder->work_order_no} fully approved and marked completed ({$workOrder->quantity}/{$workOrder->quantity}).");
     }
@@ -614,6 +730,15 @@ class WorkOrderController extends Controller
                 'approved_at' => Carbon::now(),
             ]);
 
+            $workOrder->logActivity(
+                action: 'completed',
+                note: "Order fully completed ({$totalQty}/{$totalQty} pieces).",
+                details: [
+                    'completed_quantity' => $totalQty,
+                    'total_quantity'     => $totalQty,
+                ]
+            );
+
             return back()->with('success', "Order {$workOrder->work_order_no} fully completed ({$totalQty}/{$totalQty}).");
         } elseif ($completed > 0) {
             $workOrder->update([
@@ -622,6 +747,27 @@ class WorkOrderController extends Controller
             ]);
 
             $balance = $totalQty - $completed;
+            $attemptNumber = $workOrder->logs()->where('action', 'partially_completed')->count() + 1;
+
+            $suffix = match ($attemptNumber) {
+                1 => '1st',
+                2 => '2nd',
+                3 => '3rd',
+                default => "{$attemptNumber}th",
+            };
+
+            $workOrder->logActivity(
+                action: 'partially_completed',
+                note: "Partially completed ({$suffix} time): {$completed} of {$totalQty} completed ({$balance} balance remaining).",
+                details: [
+                    'completed_quantity' => $completed,
+                    'total_quantity'     => $totalQty,
+                    'balance_quantity'   => $balance,
+                    'attempt_number'     => $attemptNumber,
+                ],
+                attemptNumber: $attemptNumber
+            );
+
             return back()->with('success', "Order {$workOrder->work_order_no} updated: {$completed} of {$totalQty} completed ({$balance} balance remaining).");
         } else {
             $status = $workOrder->craftsman_id ? 'in_process' : 'pending';
@@ -630,8 +776,41 @@ class WorkOrderController extends Controller
                 'status' => $status,
             ]);
 
+            $workOrder->logActivity(
+                action: 'reset',
+                note: "Completed quantity reset to 0. Status reverted to " . ucwords(str_replace('_', ' ', $status)) . ".",
+                details: ['completed_quantity' => 0]
+            );
+
             return back()->with('success', "Order {$workOrder->work_order_no} completed quantity reset to 0.");
         }
+    }
+
+    public function undoCompletion(WorkOrder $workOrder): RedirectResponse
+    {
+        if ($workOrder->status !== 'completed') {
+            return back()->withErrors(['error' => 'Can only undo completion on orders that are currently completed.']);
+        }
+
+        $newStatus = $workOrder->craftsman_id ? 'in_process' : 'pending';
+
+        $workOrder->update([
+            'status' => $newStatus,
+            'approved_at' => null,
+        ]);
+
+        $craftsmanName = optional($workOrder->craftsman)->name;
+        $workOrder->logActivity(
+            action: 'undo_completion',
+            note: "Completion undone by Admin. Order returned back to " . ucwords(str_replace('_', ' ', $newStatus)) . " for rework/review.",
+            details: [
+                'previous_status' => 'completed',
+                'new_status'      => $newStatus,
+                'craftsman_name'  => $craftsmanName,
+            ]
+        );
+
+        return back()->with('success', "Order {$workOrder->work_order_no} completion undone. Reverted back to " . ucwords(str_replace('_', ' ', $newStatus)) . ".");
     }
 
     public function bulkComplete(Request $request): RedirectResponse
@@ -648,6 +827,15 @@ class WorkOrderController extends Controller
                 'status' => 'completed',
                 'approved_at' => Carbon::now(),
             ]);
+
+            $order->logActivity(
+                action: 'completed',
+                note: "Marked completed via Bulk Action ({$order->quantity}/{$order->quantity} pieces).",
+                details: [
+                    'completed_quantity' => $order->quantity,
+                    'total_quantity'     => $order->quantity,
+                ]
+            );
         }
 
         return back()->with('success', count($request->order_ids) . ' work orders marked as completed.');
@@ -757,12 +945,12 @@ class WorkOrderController extends Controller
             if ($request->filled('nickname')) {
                 $nickFilter = trim($request->nickname);
                 $query->where(function ($q) use ($nickFilter) {
-                    $q->where('design_nickname', 'like', "%{$nickFilter}%")
+                    $q->where('design_nickname', $nickFilter)
                         ->orWhereExists(function ($sub) use ($nickFilter) {
                             $sub->select(DB::raw(1))
                                 ->from('design_codes')
                                 ->whereColumn('design_codes.code', 'work_orders.design_code')
-                                ->where('design_codes.nickname', 'like', "%{$nickFilter}%");
+                                ->where('design_codes.nickname', $nickFilter);
                         });
                 });
             }
@@ -1031,6 +1219,18 @@ class WorkOrderController extends Controller
                 $workOrder->created_at = $parsedCreatedDate;
                 $workOrder->saveQuietly();
             }
+
+            $workOrder->logActivity(
+                action: 'created',
+                note: "Work order created via Excel/CSV import. Quantity: {$workOrder->quantity} {$workOrder->unit_type}, Weight: {$workOrder->target_weight}g.",
+                details: [
+                    'source' => 'import',
+                    'work_order_no' => $workOrder->work_order_no,
+                    'reference_no' => $workOrder->reference_no,
+                    'quantity' => $workOrder->quantity,
+                    'due_date' => $dueDate,
+                ]
+            );
 
             $importedCount++;
         }

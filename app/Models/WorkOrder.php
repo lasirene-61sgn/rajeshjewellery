@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Override;
 
@@ -106,6 +107,49 @@ class WorkOrder extends Model
     public function craftsman(): BelongsTo
     {
         return $this->belongsTo(Craftsman::class, 'craftsman_id');
+    }
+
+    public function logs(): HasMany
+    {
+        return $this->hasMany(WorkOrderLog::class, 'work_order_id')->orderBy('created_at', 'asc')->orderBy('id', 'asc');
+    }
+
+    public function logActivity(
+        string $action,
+        ?string $note = null,
+        array $details = [],
+        ?string $actorType = null,
+        ?int $actorId = null,
+        ?string $actorName = null,
+        ?int $attemptNumber = null
+    ): WorkOrderLog {
+        if ($actorType === null) {
+            if (auth()->guard('admin')->check()) {
+                $actorType = 'admin';
+                $admin = auth()->guard('admin')->user();
+                $actorId = $admin?->id;
+                $actorName = $admin?->name ?? 'Admin';
+            } elseif (auth()->guard('craftsman')->check()) {
+                $actorType = 'craftsman';
+                $craftsman = auth()->guard('craftsman')->user();
+                $actorId = $craftsman?->id;
+                $actorName = $craftsman?->name ?? 'Craftsman';
+            } else {
+                $actorType = 'system';
+                $actorName = 'System';
+            }
+        }
+
+        return $this->logs()->create([
+            'action'         => $action,
+            'status'         => $this->status,
+            'attempt_number' => $attemptNumber,
+            'actor_type'     => $actorType,
+            'actor_id'       => $actorId,
+            'actor_name'     => $actorName,
+            'note'           => $note,
+            'details'        => $details,
+        ]);
     }
 
     public function scopePending(Builder $query): Builder

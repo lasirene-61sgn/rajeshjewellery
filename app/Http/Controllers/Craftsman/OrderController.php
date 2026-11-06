@@ -59,6 +59,16 @@ class OrderController extends Controller
             'status' => $request->status
         ]);
 
+        $craftsmanName = Auth::guard('craftsman')->user()?->name ?? 'Craftsman';
+        $order->logActivity(
+            action: $request->status,
+            note: "Order status updated to " . ucwords(str_replace('_', ' ', $request->status)) . " by Craftsman {$craftsmanName}.",
+            details: [
+                'status'         => $request->status,
+                'craftsman_name' => $craftsmanName,
+            ]
+        );
+
         return back()->with('success', 'Order status updated successfully.');
     }
 }

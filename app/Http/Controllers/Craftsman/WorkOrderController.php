@@ -141,10 +141,21 @@ class WorkOrderController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $craftsmanName = Auth::guard('craftsman')->user()?->name ?? 'Craftsman';
+
         $workOrder->update([
             'status'      => 'in_process',
             'accepted_at' => Carbon::now(),
         ]);
+
+        $workOrder->logActivity(
+            action: 'in_process',
+            note: "Work order accepted by Craftsman {$craftsmanName}. Fabrication started (In Process).",
+            details: [
+                'craftsman_id'   => $workOrder->craftsman_id,
+                'craftsman_name' => $craftsmanName,
+            ]
+        );
 
         return back()->with('success', "Order {$workOrder->work_order_no} accepted successfully.");
     }
@@ -156,16 +167,32 @@ class WorkOrderController extends Controller
             'order_ids.*' => ['exists:work_orders,id'],
         ]);
 
-        $craftsmanId = Auth::guard('craftsman')->id();
-        $updated = WorkOrder::where('craftsman_id', $craftsmanId)
+        $craftsman = Auth::guard('craftsman')->user();
+        $craftsmanId = $craftsman->id;
+        $craftsmanName = $craftsman->name ?? 'Craftsman';
+
+        $orders = WorkOrder::where('craftsman_id', $craftsmanId)
             ->whereIn('id', $request->order_ids)
             ->where('status', 'allocated')
-            ->update([
+            ->get();
+
+        foreach ($orders as $order) {
+            $order->update([
                 'status'      => 'in_process',
                 'accepted_at' => Carbon::now(),
             ]);
 
-        return back()->with('success', "Successfully accepted {$updated} work order(s).");
+            $order->logActivity(
+                action: 'in_process',
+                note: "Work order accepted by Craftsman {$craftsmanName}. Fabrication started (In Process).",
+                details: [
+                    'craftsman_id'   => $craftsmanId,
+                    'craftsman_name' => $craftsmanName,
+                ]
+            );
+        }
+
+        return back()->with('success', "Successfully accepted " . count($orders) . " work order(s).");
     }
 
     public function reject(Request $request, WorkOrder $workOrder): RedirectResponse
@@ -178,10 +205,21 @@ class WorkOrderController extends Controller
             'reject_reason' => ['required', 'string', 'max:1000'],
         ]);
 
+        $craftsmanName = Auth::guard('craftsman')->user()?->name ?? 'Craftsman';
+
         $workOrder->update([
             'status'        => 'rejected',
             'reject_reason' => $request->reject_reason,
         ]);
+
+        $workOrder->logActivity(
+            action: 'rejected',
+            note: "Rejected by Craftsman {$craftsmanName}. Reason: {$request->reject_reason}",
+            details: [
+                'reject_reason'  => $request->reject_reason,
+                'craftsman_name' => $craftsmanName,
+            ]
+        );
 
         return back()->with('success', "Order {$workOrder->work_order_no} has been rejected.");
     }
@@ -194,16 +232,32 @@ class WorkOrderController extends Controller
             'reject_reason' => ['required', 'string', 'max:1000'],
         ]);
 
-        $craftsmanId = Auth::guard('craftsman')->id();
-        $updated = WorkOrder::where('craftsman_id', $craftsmanId)
+        $craftsman = Auth::guard('craftsman')->user();
+        $craftsmanId = $craftsman->id;
+        $craftsmanName = $craftsman->name ?? 'Craftsman';
+
+        $orders = WorkOrder::where('craftsman_id', $craftsmanId)
             ->whereIn('id', $request->order_ids)
             ->where('status', 'allocated')
-            ->update([
+            ->get();
+
+        foreach ($orders as $order) {
+            $order->update([
                 'status'        => 'rejected',
                 'reject_reason' => $request->reject_reason,
             ]);
 
-        return back()->with('success', "Successfully rejected {$updated} work order(s).");
+            $order->logActivity(
+                action: 'rejected',
+                note: "Rejected by Craftsman {$craftsmanName}. Reason: {$request->reject_reason}",
+                details: [
+                    'reject_reason'  => $request->reject_reason,
+                    'craftsman_name' => $craftsmanName,
+                ]
+            );
+        }
+
+        return back()->with('success', "Successfully rejected " . count($orders) . " work order(s).");
     }
 
     public function submitForApproval(Request $request, WorkOrder $workOrder): RedirectResponse
@@ -212,10 +266,20 @@ class WorkOrderController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $craftsmanName = Auth::guard('craftsman')->user()?->name ?? 'Craftsman';
+
         $workOrder->update([
             'status'       => 'for_approval',
             'submitted_at' => Carbon::now(),
         ]);
+
+        $workOrder->logActivity(
+            action: 'for_approval',
+            note: "Submitted by Craftsman {$craftsmanName} for QC inspection and approval.",
+            details: [
+                'craftsman_name' => $craftsmanName,
+            ]
+        );
 
         return back()->with('success', "Order {$workOrder->work_order_no} submitted for QC approval.");
     }
@@ -227,16 +291,31 @@ class WorkOrderController extends Controller
             'order_ids.*' => ['exists:work_orders,id'],
         ]);
 
-        $craftsmanId = Auth::guard('craftsman')->id();
-        $updated = WorkOrder::where('craftsman_id', $craftsmanId)
+        $craftsman = Auth::guard('craftsman')->user();
+        $craftsmanId = $craftsman->id;
+        $craftsmanName = $craftsman->name ?? 'Craftsman';
+
+        $orders = WorkOrder::where('craftsman_id', $craftsmanId)
             ->whereIn('id', $request->order_ids)
             ->whereIn('status', ['in_process', 'returned', 'partially_completed'])
-            ->update([
+            ->get();
+
+        foreach ($orders as $order) {
+            $order->update([
                 'status'       => 'for_approval',
                 'submitted_at' => Carbon::now(),
             ]);
 
-        return back()->with('success', "Successfully submitted {$updated} work order(s) for QC approval.");
+            $order->logActivity(
+                action: 'for_approval',
+                note: "Submitted by Craftsman {$craftsmanName} for QC inspection and approval.",
+                details: [
+                    'craftsman_name' => $craftsmanName,
+                ]
+            );
+        }
+
+        return back()->with('success', "Successfully submitted " . count($orders) . " work order(s) for QC approval.");
     }
 
     public function print(WorkOrder $workOrder): View

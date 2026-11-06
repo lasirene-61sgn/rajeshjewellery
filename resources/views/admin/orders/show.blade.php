@@ -114,8 +114,8 @@
                         <span class="text-sm font-semibold text-slate-800">{{ $order->due_date ? $order->due_date->format('d M, Y') : 'N/A' }}</span>
                     </div>
                     <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 col-span-2">
-                        <span class="text-xs text-slate-400 block">Created At</span>
-                        <span class="text-sm font-semibold text-slate-800">{{ $order->created_at->format('d M, Y - h:i A') }}</span>
+                        <span class="text-xs text-slate-400 block">Created At (Asia/Kolkata)</span>
+                        <span class="text-sm font-semibold text-slate-800">{{ $order->created_at->timezone('Asia/Kolkata')->format('d M, Y - h:i A') }}</span>
                     </div>
                 </div>
             </div>
@@ -129,6 +129,76 @@
                     </div>
                 </div>
             @endif
+
+            <!-- Log History & Status Timeline Section -->
+            <div class="pt-6 border-t border-slate-200 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <h3 class="text-base font-bold text-slate-900">Log History & Status Timeline</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Status transitions and assignment activities in <span class="font-semibold text-indigo-700">Asia/Kolkata (IST)</span> timezone.
+                        </p>
+                    </div>
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 self-start sm:self-auto">
+                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                        Asia/Kolkata
+                    </span>
+                </div>
+
+                @if($order->logs && $order->logs->isNotEmpty())
+                    <div class="relative pl-6 sm:pl-8 space-y-5 before:absolute before:left-3 sm:before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 pt-2">
+                        @foreach($order->logs as $log)
+                            @php
+                                $theme = $log->theme;
+                                $kolkataTime = $log->kolkata_time;
+                            @endphp
+                            <div class="relative group">
+                                <!-- Marker -->
+                                <div class="absolute -left-[27px] sm:-left-[35px] top-1 w-4 h-4 rounded-full border-2 border-white {{ $theme['dot'] }} shadow ring-2 ring-slate-100"></div>
+
+                                <!-- Card -->
+                                <div class="bg-slate-50/70 hover:bg-slate-50 border border-slate-200 rounded-xl p-3.5 transition-all">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 mb-1.5">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold border {{ $theme['badge'] }}">
+                                                {{ $log->action_label }}
+                                            </span>
+                                            <span class="text-xs text-slate-500">
+                                                by <strong class="text-slate-700">{{ $log->actor_name ?? 'System' }}</strong>
+                                                <span class="text-[11px] text-slate-400">({{ ucfirst($log->actor_type ?? 'system') }})</span>
+                                            </span>
+                                        </div>
+
+                                        <div class="text-xs font-mono text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
+                                            <span>{{ $kolkataTime->format('d M Y') }}</span>
+                                            <span class="text-slate-300">|</span>
+                                            <span class="font-bold text-slate-800">{{ $kolkataTime->format('h:i:s A') }}</span>
+                                            <span class="text-[10px] text-slate-400 font-sans">IST</span>
+                                        </div>
+                                    </div>
+
+                                    @if($log->note)
+                                        <p class="text-sm text-slate-700 mt-1 font-sans">{{ $log->note }}</p>
+                                    @endif
+
+                                    @if(!empty($log->details['craftsman_name']))
+                                        <div class="mt-2 text-xs text-slate-500">
+                                            Assigned to Craftsman: <strong class="text-slate-800">{{ $log->details['craftsman_name'] }}</strong>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="text-center py-6 px-4 bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
+                        <p class="text-xs text-slate-500">No activity logs recorded yet. Updates and status changes will appear here in Asia/Kolkata timezone.</p>
+                    </div>
+                @endif
+            </div>
 
             <!-- Admin Actions Bar -->
             <div class="pt-6 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">

@@ -8,7 +8,19 @@
     <!-- Header Section -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-            <h1 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">{{ $workOrder->reference_no }}</h1>
+            <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">{{ $workOrder->reference_no }}</h1>
+                @if($workOrder->has_seal)
+                    <span class="px-2 py-0.5 bg-amber-500 text-white rounded text-xs font-black uppercase tracking-wider shadow-sm">
+                        916 SEAL
+                    </span>
+                @endif
+                @if($workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                    <span class="px-2.5 py-0.5 text-xs uppercase tracking-wide bg-rose-600 text-white font-extrabold rounded-lg shadow-sm">
+                        Returned @if($workOrder->return_count > 1)(x{{ $workOrder->return_count }})@endif
+                    </span>
+                @endif
+            </div>
             <p class="text-xs text-stone-500 mt-0.5">Work Order Specifications & Details</p>
         </div>
         <div class="flex items-center gap-2.5 w-full sm:w-auto">

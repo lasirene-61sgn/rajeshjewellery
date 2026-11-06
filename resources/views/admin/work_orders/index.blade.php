@@ -91,19 +91,20 @@
                         'active' => 'border-orange-500 text-orange-900 bg-orange-50/80',
                         'badge_active' => 'bg-orange-500 text-orange font-bold',
                     ],
-                    'partially_completed' => [
-                        'label' => 'Partially Completed',
-                        'count' => $counts['partially_completed'],
-                        'dot' => 'bg-purple-500',
-                        'active' => 'border-purple-600 text-purple-900 bg-purple-50/80',
-                        'badge_active' => 'bg-purple-600 text-white font-bold',
-                    ],
+                    
                     'for_approval' => [
                         'label' => 'For Approval',
                         'count' => $counts['for_approval'],
                         'dot' => 'bg-indigo-500 animate-pulse',
                         'active' => 'border-indigo-500 text-indigo-900 bg-indigo-50/80',
                         'badge_active' => 'bg-indigo-500 text-white font-bold',
+                    ],
+                    'partially_completed' => [
+                        'label' => 'Partially Completed',
+                        'count' => $counts['partially_completed'],
+                        'dot' => 'bg-purple-500',
+                        'active' => 'border-purple-600 text-purple-900 bg-purple-50/80',
+                        'badge_active' => 'bg-purple-600 text-white font-bold',
                     ],
                     'completed' => [
                         'label' => 'Completed',
@@ -642,6 +643,15 @@
                                     <button @click="openReturnModal({{ $order->id }}, '{{ $order->work_order_no }}')" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-semibold">
                                         Return
                                     </button>
+                                @endif
+
+                                @if($order->status === 'completed')
+                                    <form method="POST" action="{{ route('admin.work_orders.undo-completion', $order) }}" class="inline" onsubmit="return confirm('Undo completion for this order? It will revert to in-process for rework.');">
+                                        @csrf
+                                        <button type="submit" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded text-xs font-semibold" title="Undo Completion">
+                                            Undo
+                                        </button>
+                                    </form>
                                 @endif
 
                                 @if($order->status === 'pending')

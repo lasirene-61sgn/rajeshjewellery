@@ -295,10 +295,12 @@
 
             <div class="grid grid-cols-2 gap-3">
                 @forelse($workOrders as $index => $order)
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between relative group {{ $order->status === 'returned' ? 'border-rose-300 bg-rose-50/20' : '' }}">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between relative group {{ ($order->status === 'returned' || ($order->return_count ?? 0) > 0) ? 'border-rose-300 bg-rose-50/20' : '' }}">
                     <div class="absolute top-2 left-2 right-2 z-10 flex justify-between items-center pointer-events-none">
-                        @if($order->status === 'returned')
-                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-rose-100 text-rose-700 font-extrabold rounded-md shadow-xs pointer-events-auto border border-rose-200">QC Defect</span>
+                        @if($order->status === 'returned' || ($order->return_count ?? 0) > 0)
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-rose-600 text-white font-black rounded-md shadow-xs pointer-events-auto border border-rose-700 flex items-center gap-1">Returned @if(($order->return_count ?? 0) > 1)(x{{ $order->return_count }})@endif</span>
+                        @elseif($currentTab === 'overdue')
+                        <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-rose-500 text-white font-extrabold rounded-md shadow-xs pointer-events-auto border border-rose-600">Overdue</span>
                         @elseif($order->status === 'allocated')
                         <span class="px-2 py-0.5 text-[9px] uppercase tracking-wide bg-sky-100 text-sky-800 font-extrabold rounded-md shadow-xs pointer-events-auto border border-sky-200">Allocated</span>
                         @elseif($order->status === 'rejected')
@@ -325,7 +327,7 @@
                             @endif
                             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
                             @if($order->has_seal)
-                            <span class="absolute top-2 left-2 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow uppercase tracking-wider">
+                            <span class="absolute bottom-2 right-2 z-10 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow uppercase tracking-wider flex items-center gap-0.5">
                                 916 SEAL
                             </span>
                             @endif
@@ -346,9 +348,24 @@
                                 <span class="text-xs font-extrabold text-amber-600">QTY : {{ ($order->job_type) }}</span>
                             </div>
                             <div class="text-[10px] text-slate-500 flex justify-between pt-2 border-t border-slate-100">
-                                <span class="font-semibold">{{ $order->reference_no }}</span>
-                                <span>{{ $order->due_date ? \Carbon\Carbon::parse($order->due_date)->format('d M') : '-' }}</span>
+                                <div class="flex items-center gap-1 min-w-0">
+                                    <span class="font-semibold truncate">{{ $order->reference_no }}</span>
+                                    <!-- @if($order->has_seal)
+                                        <span class="px-1 py-0.2 bg-amber-500 text-white rounded text-[8px] font-black uppercase tracking-wider shrink-0 shadow-2xs">916 SEAL</span>
+                                    @endif -->
+                                </div>
+                                @if($order->return_due_date)
+                                    <span class="text-rose-600 font-bold shrink-0">Rework: {{ \Carbon\Carbon::parse($order->return_due_date)->format('d M') }}</span>
+                                @else
+                                    <span class="shrink-0">{{ $order->due_date ? \Carbon\Carbon::parse($order->due_date)->format('d M') : '-' }}</span>
+                                @endif
                             </div>
+
+                            @if($order->status === 'returned' && $order->return_reason)
+                                <div class="mt-1 text-[9px] text-rose-800 bg-rose-50 border border-rose-200 rounded p-1.5 leading-tight">
+                                    <span class="font-bold">Return Reason:</span> {{ $order->return_reason }}
+                                </div>
+                            @endif
 
                             @if($order->status === 'allocated')
                                 <div class="flex items-center gap-1.5 pt-2 border-t border-slate-100">
@@ -357,6 +374,12 @@
                                     </button>
                                     <button type="button" @click="openRejectModal({{ $order->id }}, '{{ $order->work_order_no ?? $order->reference_no }}')" class="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold text-center shadow-xs transition-colors">
                                         Reject
+                                    </button>
+                                </div>
+                            @elseif(in_array($order->status, ['in_process', 'returned', 'partially_completed']))
+                                <div class="pt-2 border-t border-slate-100">
+                                    <button type="button" onclick="if(confirm('Submit this piece for QC inspection?')) { submitSingleAction('{{ route('craftsman.work-orders.submit', $order) }}'); }" class="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold text-center shadow-xs transition-colors">
+                                        Send Approval
                                     </button>
                                 </div>
                             @elseif($order->status === 'rejected' && $order->reject_reason)
@@ -436,14 +459,14 @@
                                         'partially_completed' => ['bg' => 'bg-purple-100 text-purple-800 border-purple-200 font-bold', 'dot' => 'bg-purple-500', 'label' => 'Partially Completed'],
                                         'for_approval'        => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For approval'],
                                         'rejected'            => ['bg' => 'bg-rose-50 text-rose-700 border-rose-200 font-bold', 'dot' => 'bg-rose-500', 'label' => 'Rejected'],
-                                        'returned'            => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'QC Defect'],
+                                        'returned'            => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
                                         'completed'           => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed'],
                                     ];
                                     $st = $statusConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucfirst(str_replace('_', ' ', $order->status))];
                                 @endphp
                                 <span class="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border {{ $st['bg'] }}">
                                     <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $st['dot'] }}"></span>
-                                    <span>{{ $st['label'] }}@if($order->status === 'returned' && $order->return_count) (x{{ $order->return_count }})@endif</span>
+                                    <span>@if(($order->return_count ?? 0) > 0 && $order->status !== 'returned')Returned &bull; @endif{{ $st['label'] }}@if($order->status === 'returned' && $order->return_count) (x{{ $order->return_count }})@endif</span>
                                 </span>
                                 @if($order->status === 'rejected' && $order->reject_reason)
                                     <div class="mt-1 text-2xs text-rose-800 bg-rose-50 border border-rose-200 rounded px-1.5 py-1 max-w-[200px] break-words">
@@ -479,7 +502,13 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                                @if($order->status === 'allocated')
+                                @if($order->status === 'returned' && $order->return_reason)
+                                <div class="mt-1 text-[9px] text-rose-800 bg-rose-50 border border-rose-200 rounded p-1.5 leading-tight">
+                                    <span class="font-bold">Return Reason:</span> {{ $order->return_reason }}
+                                </div>
+                            @endif
+
+                            @if($order->status === 'allocated')
                                     <button type="button" onclick="submitSingleAction('{{ route('craftsman.work-orders.accept', $order) }}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Accept</button>
                                     <button type="button" @click="openRejectModal({{ $order->id }}, '{{ $order->work_order_no ?? $order->reference_no }}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Reject</button>
                                 @elseif(in_array($order->status, ['in_process', 'returned', 'partially_completed']))
