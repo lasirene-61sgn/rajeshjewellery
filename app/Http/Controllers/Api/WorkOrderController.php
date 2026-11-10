@@ -439,20 +439,26 @@ class WorkOrderController extends Controller
     }
 
     /**
-     * Format pagination metadata with navigation URLs and item boundaries.
+     * Format pagination metadata with navigation URLs and item boundaries matching standard Laravel paginator.
      */
     protected function formatPagination($paginator): array
     {
         return [
             'current_page'   => $paginator->currentPage(),
+            'first_page_url' => $paginator->url(1),
+            'from'           => $paginator->firstItem(),
             'last_page'      => $paginator->lastPage(),
-            'per_page'       => $paginator->perPage(),
-            'total'          => $paginator->total(),
-            'from'           => $paginator->firstItem() ?? 0,
-            'to'             => $paginator->lastItem() ?? 0,
-            'has_more_pages' => $paginator->hasMorePages(),
+            'last_page_url'  => $paginator->url($paginator->lastPage()),
+            'links'          => method_exists($paginator, 'linkCollection')
+                ? $paginator->linkCollection()->toArray()
+                : [],
             'next_page_url'  => $paginator->nextPageUrl(),
+            'path'           => $paginator->path(),
+            'per_page'       => $paginator->perPage(),
             'prev_page_url'  => $paginator->previousPageUrl(),
+            'to'             => $paginator->lastItem(),
+            'total'          => $paginator->total(),
+            'has_more_pages' => $paginator->hasMorePages(),
         ];
     }
 
@@ -637,6 +643,9 @@ class WorkOrderController extends Controller
 
         return [
             'id'                  => $order->id,
+            'craftsman_serial_no' => $order->craftsman_serial_no,
+            's_no'                => $order->craftsman_serial_no ?? $order->id,
+            'sno'                 => $order->craftsman_serial_no ?? $order->id,
             'work_order_no'       => $order->work_order_no,
             'reference_no'        => $order->reference_no,
             'product_name'        => $order->product_name,

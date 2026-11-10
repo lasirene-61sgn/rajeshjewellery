@@ -118,6 +118,12 @@
                 </div>
 
                 <!-- Stats Grid Cards -->
+                <div class="mb-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold font-mono">
+                        <span>S.No:</span>
+                        <span class="text-sm font-black">#{{ $workOrder->craftsman_serial_no ?? $workOrder->id }}</span>
+                    </span>
+                </div>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
                     @if($workOrder->work_order_no)
                     <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">

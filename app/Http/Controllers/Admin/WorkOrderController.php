@@ -131,23 +131,13 @@ class WorkOrderController extends Controller
 
         $query = WorkOrder::with('craftsman')->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
-        // 1. Search Query
+        // 1. Search & Multi-Ref Query
         if ($request->filled('search')) {
-            $search = trim($request->search);
-            $query->where(function ($q) use ($search) {
-                $q->where('work_order_no', 'like', "%{$search}%")
-                    ->orWhere('reference_no', 'like', "%{$search}%")
-                    ->orWhere('product_name', 'like', "%{$search}%")
-                    ->orWhere('design_code', 'like', "%{$search}%")
-                    ->orWhere('design_nickname', 'like', "%{$search}%")
-                    ->orWhere('seal', 'like', "%{$search}%")
-                    ->orWhereExists(function ($sub) use ($search) {
-                        $sub->select(DB::raw(1))
-                            ->from('design_codes')
-                            ->whereColumn('design_codes.code', 'work_orders.design_code')
-                            ->where('design_codes.nickname', 'like', "%{$search}%");
-                    });
-            });
+            $this->applySearchFilter($query, $request->search);
+        }
+
+        if ($request->filled('reference_no')) {
+            $this->applyRefNoFilter($query, $request->reference_no);
         }
 
         // 2. Dropdown Filters
@@ -499,12 +489,20 @@ class WorkOrderController extends Controller
         ]);
 
         $isReallocate = $workOrder->status === 'rejected';
+        $craftsmanId = (int) $request->craftsman_id;
+        $isDifferentCraftsman = (int) $workOrder->craftsman_id !== $craftsmanId;
+        $serialNo = $workOrder->craftsman_serial_no;
+
+        if ($isDifferentCraftsman || empty($serialNo)) {
+            $serialNo = WorkOrder::getNextCraftsmanSerialNo($craftsmanId);
+        }
 
         $updateData = [
-            'craftsman_id'  => $request->craftsman_id,
-            'status'        => 'allocated',
-            'reject_reason' => null,
-            'allocated_at'  => Carbon::now(),
+            'craftsman_id'        => $craftsmanId,
+            'craftsman_serial_no' => $serialNo,
+            'status'              => 'allocated',
+            'reject_reason'       => null,
+            'allocated_at'        => Carbon::now(),
         ];
 
         if ($request->filled('due_date')) {
@@ -517,17 +515,18 @@ class WorkOrderController extends Controller
         $action = $isReallocate ? 'reallocated' : 'allocated';
         $workOrder->logActivity(
             action: $action,
-            note: ($isReallocate ? 'Reallocated' : 'Allocated') . " to Craftsman: {$craftsman?->name}" . ($request->filled('due_date') ? " (Due Date: " . Carbon::parse($request->due_date)->format('d M Y') . ")" : ""),
+            note: ($isReallocate ? 'Reallocated' : 'Allocated') . " to Craftsman: {$craftsman?->name} (S.No: #{$serialNo})" . ($request->filled('due_date') ? " (Due Date: " . Carbon::parse($request->due_date)->format('d M Y') . ")" : ""),
             details: [
-                'craftsman_id'   => $craftsman?->id,
-                'craftsman_name' => $craftsman?->name,
-                'due_date'       => $request->due_date ?? optional($workOrder->due_date)->format('Y-m-d'),
+                'craftsman_id'        => $craftsman?->id,
+                'craftsman_name'      => $craftsman?->name,
+                'craftsman_serial_no' => $serialNo,
+                'due_date'            => $request->due_date ?? optional($workOrder->due_date)->format('Y-m-d'),
             ]
         );
 
         $msg = $isReallocate
-            ? "Order {$workOrder->work_order_no} reallocated to craftsman successfully."
-            : "Order {$workOrder->work_order_no} allocated to craftsman.";
+            ? "Order {$workOrder->work_order_no} reallocated to craftsman successfully (S.No: #{$serialNo})."
+            : "Order {$workOrder->work_order_no} allocated to craftsman (S.No: #{$serialNo}).";
 
         return back()->with('success', $msg);
     }
@@ -547,14 +546,26 @@ class WorkOrderController extends Controller
         ]);
 
         $craftsman = Craftsman::find($request->craftsman_id);
+        $craftsmanId = (int) $request->craftsman_id;
         $orders = WorkOrder::whereIn('id', $request->order_ids)->get();
 
+        $currentMax = (int) WorkOrder::where('craftsman_id', $craftsmanId)->max('craftsman_serial_no');
+
         foreach ($orders as $workOrder) {
+            $isDifferentCraftsman = (int) $workOrder->craftsman_id !== $craftsmanId;
+            $serialNo = $workOrder->craftsman_serial_no;
+
+            if ($isDifferentCraftsman || empty($serialNo)) {
+                $currentMax++;
+                $serialNo = $currentMax;
+            }
+
             $updateData = [
-                'craftsman_id'  => $request->craftsman_id,
-                'status'        => 'allocated',
-                'reject_reason' => null,
-                'allocated_at'  => Carbon::now(),
+                'craftsman_id'        => $craftsmanId,
+                'craftsman_serial_no' => $serialNo,
+                'status'              => 'allocated',
+                'reject_reason'       => null,
+                'allocated_at'        => Carbon::now(),
             ];
 
             if ($request->filled('due_date')) {
@@ -565,11 +576,12 @@ class WorkOrderController extends Controller
 
             $workOrder->logActivity(
                 action: 'allocated',
-                note: "Allocated to Craftsman: {$craftsman?->name} via Bulk Action" . ($request->filled('due_date') ? " (Due Date: " . Carbon::parse($request->due_date)->format('d M Y') . ")" : ""),
+                note: "Allocated to Craftsman: {$craftsman?->name} via Bulk Action (S.No: #{$serialNo})" . ($request->filled('due_date') ? " (Due Date: " . Carbon::parse($request->due_date)->format('d M Y') . ")" : ""),
                 details: [
-                    'craftsman_id'   => $craftsman?->id,
-                    'craftsman_name' => $craftsman?->name,
-                    'due_date'       => $request->due_date ?? optional($workOrder->due_date)->format('Y-m-d'),
+                    'craftsman_id'        => $craftsman?->id,
+                    'craftsman_name'      => $craftsman?->name,
+                    'craftsman_serial_no' => $serialNo,
+                    'due_date'            => $request->due_date ?? optional($workOrder->due_date)->format('Y-m-d'),
                 ]
             );
         }
@@ -880,22 +892,11 @@ class WorkOrderController extends Controller
             $query = WorkOrder::query()->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
             if ($request->filled('search')) {
-                $search = trim($request->search);
-                $query->where(function ($q) use ($search) {
-                    $q->where('work_order_no', 'like', "%{$search}%")
-                        ->orWhere('reference_no', 'like', "%{$search}%")
-                        ->orWhere('product_name', 'like', "%{$search}%")
-                        ->orWhere('design_code', 'like', "%{$search}%")
-                        ->orWhere('design_nickname', 'like', "%{$search}%")
-                        ->orWhere('seal', 'like', "%{$search}%")
-                        ->orWhere('craftsman_id', 'like', "%{$search}%")
-                        ->orWhereExists(function ($sub) use ($search) {
-                            $sub->select(DB::raw(1))
-                                ->from('design_codes')
-                                ->whereColumn('design_codes.code', 'work_orders.design_code')
-                                ->where('design_codes.nickname', 'like', "%{$search}%");
-                        });
-                });
+                $this->applySearchFilter($query, $request->search);
+            }
+
+            if ($request->filled('reference_no')) {
+                $this->applyRefNoFilter($query, $request->reference_no);
             }
 
             if ($request->filled('category')) {
@@ -1238,5 +1239,95 @@ class WorkOrderController extends Controller
         $backUrl = session('admin_work_orders_url', route('admin.work_orders.index'));
 
         return redirect($backUrl)->with('success', "Successfully imported {$importedCount} work orders. ({$skippedCount} duplicates skipped).");
+    }
+
+    /**
+     * Apply keyword and multi-ref search filters to a work orders query.
+     */
+    protected function applySearchFilter(mixed $query, ?string $search): void
+    {
+        if (blank($search)) {
+            return;
+        }
+
+        $rawSearch = trim((string) $search);
+
+        // Check for multiple tokens separated by commas, semicolons, or newlines
+        $multiTokens = preg_split('/[\r\n,;]+/', $rawSearch, -1, PREG_SPLIT_NO_EMPTY);
+        $multiTokens = array_values(array_filter(array_map('trim', $multiTokens)));
+
+        // If only 1 token resulted, check if it contains space-separated tokens resembling reference or work order numbers
+        if (count($multiTokens) === 1) {
+            $spaceTokens = preg_split('/\s+/', $multiTokens[0], -1, PREG_SPLIT_NO_EMPTY);
+            if (count($spaceTokens) > 1 && collect($spaceTokens)->every(fn($t) => preg_match('/^(REF|WO|\d|[A-Z]{2,}-\d)/i', $t))) {
+                $multiTokens = $spaceTokens;
+            }
+        }
+
+        if (count($multiTokens) > 1) {
+            $query->where(function ($q) use ($multiTokens) {
+                // Exact matching on indexed columns
+                $q->whereIn('reference_no', $multiTokens)
+                    ->orWhereIn('work_order_no', $multiTokens);
+
+                // Partial matching across reference numbers, work order numbers, and details
+                if (count($multiTokens) <= 50) {
+                    foreach ($multiTokens as $token) {
+                        $q->orWhere('reference_no', 'like', "%{$token}%")
+                            ->orWhere('work_order_no', 'like', "%{$token}%")
+                            ->orWhere('design_code', 'like', "%{$token}%")
+                            ->orWhere('product_name', 'like', "%{$token}%");
+                    }
+                }
+            });
+
+            return;
+        }
+
+        // Standard single search term
+        $query->where(function ($q) use ($rawSearch) {
+            $q->where('work_order_no', 'like', "%{$rawSearch}%")
+                ->orWhere('reference_no', 'like', "%{$rawSearch}%")
+                ->orWhere('product_name', 'like', "%{$rawSearch}%")
+                ->orWhere('design_code', 'like', "%{$rawSearch}%")
+                ->orWhere('design_nickname', 'like', "%{$rawSearch}%")
+                ->orWhere('seal', 'like', "%{$rawSearch}%")
+                ->orWhere('craftsman_id', 'like', "%{$rawSearch}%")
+                ->orWhereExists(function ($sub) use ($rawSearch) {
+                    $sub->select(DB::raw(1))
+                        ->from('design_codes')
+                        ->whereColumn('design_codes.code', 'work_orders.design_code')
+                        ->where('design_codes.nickname', 'like', "%{$rawSearch}%");
+                });
+        });
+    }
+
+    /**
+     * Apply explicit reference number filter (supports single, array, comma/newline/space separated).
+     */
+    protected function applyRefNoFilter(mixed $query, mixed $referenceNo): void
+    {
+        if (blank($referenceNo)) {
+            return;
+        }
+
+        $refs = is_array($referenceNo)
+            ? $referenceNo
+            : preg_split('/[\r\n,;\s]+/', (string) $referenceNo, -1, PREG_SPLIT_NO_EMPTY);
+        $refs = array_values(array_filter(array_map('trim', $refs)));
+
+        if (! empty($refs)) {
+            $query->where(function ($q) use ($refs) {
+                $q->whereIn('reference_no', $refs)
+                    ->orWhereIn('work_order_no', $refs);
+
+                if (count($refs) <= 50) {
+                    foreach ($refs as $r) {
+                        $q->orWhere('reference_no', 'like', "%{$r}%")
+                            ->orWhere('work_order_no', 'like', "%{$r}%");
+                    }
+                }
+            });
+        }
     }
 }

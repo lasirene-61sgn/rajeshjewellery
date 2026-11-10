@@ -334,8 +334,11 @@
                         </div>
 
                         <div class="p-3 space-y-2">
-                            <div class="text-center">
-                                <span class="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            <div class="flex items-center justify-between gap-1">
+                                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-50 text-amber-900 border border-amber-200">
+                                    S.No #{{ $order->craftsman_serial_no ?? $order->id }}
+                                </span>
+                                <span class="inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                     {{ $order->design_code }}
                                 </span>
                             </div>
@@ -417,6 +420,7 @@
                     <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
                         <tr>
                             <th class="px-4 py-3.5"><input type="checkbox" @click="toggleSelectAll()" x-model="selectAll" class="rounded border-slate-300 text-amber-600 focus:ring-amber-600"></th>
+                            <th class="px-4 py-3.5">S.No</th>
                             <th class="px-4 py-3.5">Image</th>
                             <th class="px-4 py-3.5">Order No</th>
                             <th class="px-4 py-3.5">Ref No</th>
@@ -431,6 +435,11 @@
                         @forelse($workOrders as $order)
                         <tr class="hover:bg-slate-50 transition-colors {{ $order->status === 'returned' ? 'bg-rose-50/40' : '' }}">
                             <td class="px-4 py-3"><input type="checkbox" name="order_ids[]" value="{{ $order->id }}" x-model="selectedOrders" class="order-checkbox rounded border-slate-300 text-amber-600 focus:ring-amber-600"></td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                                    #{{ $order->craftsman_serial_no ?? $order->id }}
+                                </span>
+                            </td>
                             <td class="px-4 py-3">
                                 <div class="relative w-12 h-12">
                                     @if($order->design_image)

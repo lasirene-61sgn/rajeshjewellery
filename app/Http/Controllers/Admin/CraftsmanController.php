@@ -326,12 +326,29 @@ class CraftsmanController extends Controller
         $missingImagesCount = $pendingOrders->whereNull('design_image')->count();
 
         if ($allocatedCount > 0) {
-            WorkOrder::whereIn('id', $pendingOrders->pluck('id'))->update([
-                'craftsman_id'  => $craftsman->id,
-                'status'        => 'allocated',
-                'reject_reason' => null,
-                'allocated_at'  => Carbon::now(),
-            ]);
+            $currentMax = (int) WorkOrder::where('craftsman_id', $craftsman->id)->max('craftsman_serial_no');
+            $now = Carbon::now();
+
+            foreach ($pendingOrders as $pendingOrder) {
+                $currentMax++;
+                $pendingOrder->update([
+                    'craftsman_id'        => $craftsman->id,
+                    'craftsman_serial_no' => $currentMax,
+                    'status'              => 'allocated',
+                    'reject_reason'       => null,
+                    'allocated_at'        => $now,
+                ]);
+
+                $pendingOrder->logActivity(
+                    action: 'allocated',
+                    note: "Auto-allocated to Craftsman: {$craftsman->name} (S.No: #{$currentMax})",
+                    details: [
+                        'craftsman_id'        => $craftsman->id,
+                        'craftsman_name'      => $craftsman->name,
+                        'craftsman_serial_no' => $currentMax,
+                    ]
+                );
+            }
         }
 
         return redirect()->back()->with('success', "{$allocatedCount} orders have been allocated and sent to the Allocated tab. {$missingImagesCount} images are not added.");

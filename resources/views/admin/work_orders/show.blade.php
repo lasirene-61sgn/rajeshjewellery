@@ -163,6 +163,19 @@
             </div>
 
             <div>
+                <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Craftsman S.No</span>
+                <p class="text-sm font-bold text-slate-800 font-mono">
+                    @if($workOrder->craftsman_serial_no)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            #{{ $workOrder->craftsman_serial_no }}
+                        </span>
+                    @else
+                        <span class="text-slate-400 font-normal italic">N/A</span>
+                    @endif
+                </p>
+            </div>
+
+            <div>
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-1">Quantity & Progress</span>
                 <p class="text-sm font-medium text-slate-800">
                     Total: <strong class="text-slate-900">{{ $workOrder->quantity }} {{ $workOrder->unit_type }}</strong>

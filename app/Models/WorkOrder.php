@@ -22,6 +22,7 @@ class WorkOrder extends Model
     protected $fillable = [
         'work_order_no',
         'reference_no',
+        'craftsman_serial_no',
         'product_name',
         'design_code',
         'design_nickname',
@@ -78,7 +79,16 @@ class WorkOrder extends Model
             'submitted_at' => 'datetime',
             'completed_at' => 'datetime',
             'approved_at' => 'datetime',
+            'craftsman_serial_no' => 'integer',
         ];
+    }
+
+    /**
+     * Get the next serial number for a specific craftsman (1 to N).
+     */
+    public static function getNextCraftsmanSerialNo(int $craftsmanId): int
+    {
+        return ((int) static::where('craftsman_id', $craftsmanId)->max('craftsman_serial_no')) + 1;
     }
 
     

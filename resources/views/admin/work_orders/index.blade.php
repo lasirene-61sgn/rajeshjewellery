@@ -3,6 +3,13 @@
 @section('title', 'Work Orders')
 
 @section('content')
+@php
+    $rawSearch = (string) request('search', '');
+    $activeRefNumbers = [];
+    if ($rawSearch !== '') {
+        $activeRefNumbers = array_values(array_filter(array_map('trim', preg_split('/[\r\n,;]+/', $rawSearch))));
+    }
+@endphp
 <div x-data="workOrderManager()" class="space-y-6">
 
     <!-- Top Header -->
@@ -16,6 +23,7 @@
                 @csrf
                 <input type="hidden" name="tab" value="{{ $currentTab }}">
                 <input type="hidden" name="search" value="{{ request('search') }}">
+                <input type="hidden" name="reference_no" value="{{ request('reference_no') }}">
                 <input type="hidden" name="category" value="{{ request('category') }}">
                 <input type="hidden" name="subcategory" value="{{ request('subcategory') }}">
                 <input type="hidden" name="craftsman_id" value="{{ request('craftsman_id') }}">
@@ -155,14 +163,55 @@
 
     <!-- Filter & Search Toolbar -->
     <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <form method="GET" action="{{ route('admin.work_orders.index') }}" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <form id="workOrdersFilterForm" method="GET" action="{{ route('admin.work_orders.index') }}" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <input type="hidden" name="tab" value="{{ $currentTab }}">
             <input type="hidden" name="per_page" value="{{ $perPage }}">
 
-            <!-- Keyword Search -->
+            <!-- Keyword & Multi-Ref Search (Box Type with X Mark) -->
             <div class="lg:col-span-2">
-                <label class="block text-2xs uppercase font-bold text-slate-500 mb-1">Search</label>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Order No, Product, Ref, Code, Nickname..." class="w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-indigo-500 border-slate-300">
+                <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center gap-1.5">
+                        <label class="block text-2xs uppercase font-bold text-slate-500">Search</label>
+                        <span x-show="refNumbers.length > 0" class="px-2 py-0.5 rounded-full text-3xs font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-200" x-text="refNumbers.length + (refNumbers.length === 1 ? ' Ref No' : ' Ref Nos')"></span>
+                    </div>
+                    <button type="button" @click="openMultiRefModal()" class="text-3xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                        <span>Multi Ref Search</span>
+                    </button>
+                </div>
+
+                <!-- Interactive Box / Tag Container -->
+                <div class="min-h-[38px] p-1.5 border border-slate-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 flex flex-wrap items-center gap-1.5 transition-all">
+                    <!-- Render each tag box with 'x' mark -->
+                    <template x-for="(ref, index) in refNumbers" :key="index">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-md text-xs font-mono font-bold shadow-2xs">
+                            <span x-text="ref"></span>
+                            <button type="button" @click="removeRefNumber(index, true)" title="Remove this ref" class="text-indigo-400 hover:text-rose-600 hover:bg-indigo-100 rounded p-0.5 transition-colors">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </span>
+                    </template>
+
+                    <!-- Typing input -->
+                    <input type="text"
+                           x-ref="newRefInput"
+                           x-model="newRefInput"
+                           @keydown.enter.prevent="addRefNumberAndSearch()"
+                           @keydown.comma.prevent="addRefNumber()"
+                           @paste="handleRefPaste($event)"
+                           :placeholder="refNumbers.length === 0 ? 'Type Ref No, Order No, Code... (Enter to add)' : 'Add more...'"
+                           class="flex-1 min-w-[130px] border-0 p-1 text-xs focus:ring-0 focus:outline-none bg-transparent text-slate-800 placeholder-slate-400">
+
+                    <!-- Clear All button -->
+                    <button type="button" x-show="refNumbers.length > 0" @click="clearAllRefNumbers(true)" title="Clear all ref numbers" class="text-slate-400 hover:text-rose-600 p-1 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Hidden input submitted with the form -->
+                <input type="hidden" id="workOrderSearchInput" name="search" :value="searchQueryValue">
             </div>
 
             <!-- Category Searchable Dropdown -->
@@ -361,7 +410,7 @@
                 <button type="submit" class="px-5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg transition-colors">
                     Apply Filters
                 </button>
-                @if(request()->anyFilled(['search', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'order_type', 'product_name', 'from_date', 'to_date']))
+                @if(request()->anyFilled(['search', 'reference_no', 'category', 'subcategory', 'craftsman_id', 'design_code', 'nickname', 'order_type', 'product_name', 'from_date', 'to_date']))
                     <a href="{{ route('admin.work_orders.index', ['tab' => $currentTab, 'per_page' => $perPage]) }}" class="px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium">
                         Reset Filters
                     </a>
@@ -456,6 +505,7 @@
                         <th class="p-4 w-4">
                             <input type="checkbox" @change="toggleSelectAll($event)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
                         </th>
+                        <th class="px-3 py-3.5 whitespace-nowrap">S.No</th>
                         <th class="px-4 py-3.5">Image</th>
                         <th class="px-4 py-3.5">Ref No</th>
                         <th class="px-4 py-3.5">Order No</th>
@@ -474,6 +524,16 @@
                         <tr class="hover:bg-slate-50 transition-colors {{ $order->status === 'returned' ? 'bg-rose-50/30' : '' }}">
                             <td class="p-4">
                                 <input type="checkbox" :value="{{ $order->id }}" x-model="selectedOrders" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            </td>
+
+                            <td class="px-3 py-3 whitespace-nowrap">
+                                @if($order->craftsman_serial_no)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        #{{ $order->craftsman_serial_no }}
+                                    </span>
+                                @else
+                                    <span class="text-slate-400 font-mono text-xs">-</span>
+                                @endif
                             </td>
 
                             <td class="px-4 py-3">
@@ -680,7 +740,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="px-6 py-12 text-center text-slate-400">
+                            <td colspan="13" class="px-6 py-12 text-center text-slate-400">
                                 No work orders found matching this filter criteria.
                             </td>
                         </tr>
@@ -894,6 +954,68 @@
         </div>
     </div>
 
+    <!-- Modal: Multi Ref Search -->
+    <div x-show="multiRefModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.outside="closeMultiRefModal()" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Search Multiple Reference Numbers</h3>
+                        <p class="text-xs text-slate-500">Paste or type reference numbers from Excel, CSV, or a list</p>
+                    </div>
+                </div>
+                <button type="button" @click="closeMultiRefModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Reference Numbers <span class="text-slate-400 font-normal lowercase">(one per line, comma or space separated)</span>
+                </label>
+                <textarea x-model="multiRefInput" rows="7" placeholder="e.g.&#10;REF-2026-001&#10;REF-2026-002&#10;REF-2026-003&#10;REF-2026-004" class="w-full text-xs font-mono rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"></textarea>
+                <div class="flex items-center justify-between mt-1 text-2xs text-slate-500">
+                    <div>
+                        <span class="font-bold text-indigo-600" x-text="detectedRefTokens.length"></span>
+                        <span x-text="detectedRefTokens.length === 1 ? ' reference number detected' : ' reference numbers detected'"></span>
+                    </div>
+                    <button type="button" x-show="multiRefInput.trim().length > 0" @click="multiRefInput = ''" class="text-rose-600 hover:underline">
+                        Clear text
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview of detected tokens -->
+            <template x-if="detectedRefTokens.length > 0">
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 max-h-24 overflow-y-auto">
+                    <div class="text-3xs uppercase font-bold text-slate-400 mb-1">Detected List Preview:</div>
+                    <div class="flex flex-wrap gap-1">
+                        <template x-for="(token, idx) in detectedRefTokens.slice(0, 20)" :key="idx">
+                            <span class="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-3xs font-mono font-medium text-slate-700" x-text="token"></span>
+                        </template>
+                        <template x-if="detectedRefTokens.length > 20">
+                            <span class="text-3xs text-slate-500 font-medium py-0.5" x-text="'+ ' + (detectedRefTokens.length - 20) + ' more'"></span>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" @click="closeMultiRefModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                    Cancel
+                </button>
+                <button type="button" @click="applyMultiRefSearch()" :disabled="detectedRefTokens.length === 0" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-md transition-colors inline-flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <span>Apply & Search</span>
+                    <span x-show="detectedRefTokens.length > 0" class="px-1.5 py-0.5 text-3xs bg-indigo-800 text-white rounded-full font-bold" x-text="detectedRefTokens.length"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -1069,6 +1191,112 @@
                 this.rejectOrderId = null;
                 this.rejectOrderNo = '';
                 this.rejectReason = '';
+            },
+
+            // Interactive Multi-Ref Tag Box State
+            refNumbers: @js($activeRefNumbers),
+            newRefInput: '',
+            get searchQueryValue() {
+                if (this.refNumbers.length > 0) {
+                    return this.refNumbers.join(', ');
+                }
+                return this.newRefInput.trim();
+            },
+            addRefNumber() {
+                const raw = this.newRefInput.trim();
+                if (!raw) return;
+                const tokens = raw.split(/[\r\n,;]+/).map(t => t.trim()).filter(Boolean);
+                tokens.forEach(t => {
+                    if (!this.refNumbers.includes(t)) {
+                        this.refNumbers.push(t);
+                    }
+                });
+                this.newRefInput = '';
+            },
+            addRefNumberAndSearch() {
+                this.addRefNumber();
+                this.submitForm();
+            },
+            removeRefNumber(index, submit = true) {
+                this.refNumbers.splice(index, 1);
+                if (submit) {
+                    this.submitForm();
+                }
+            },
+            clearAllRefNumbers(submit = true) {
+                this.refNumbers = [];
+                this.newRefInput = '';
+                if (submit) {
+                    this.submitForm();
+                }
+            },
+            handleRefPaste(e) {
+                const pastedText = (e.clipboardData || window.clipboardData)?.getData('text');
+                if (pastedText && (pastedText.includes('\n') || pastedText.includes('\r') || pastedText.includes(','))) {
+                    e.preventDefault();
+                    const tokens = pastedText.split(/[\r\n,;]+/).map(t => t.trim()).filter(Boolean);
+                    tokens.forEach(t => {
+                        if (!this.refNumbers.includes(t)) {
+                            this.refNumbers.push(t);
+                        }
+                    });
+                    this.newRefInput = '';
+                }
+            },
+            submitForm() {
+                this.$nextTick(() => {
+                    const form = document.getElementById('workOrdersFilterForm');
+                    if (form) {
+                        form.submit();
+                    }
+                });
+            },
+
+            multiRefModalOpen: false,
+            multiRefInput: '',
+            get detectedRefTokens() {
+                if (!this.multiRefInput) return [];
+                const tokens = this.multiRefInput
+                    .split(/[\r\n,;]+/)
+                    .map(t => t.trim())
+                    .filter(t => t.length > 0);
+                if (tokens.length === 1 && tokens[0].includes(' ')) {
+                    const spaceTokens = tokens[0].split(/\s+/).map(t => t.trim()).filter(t => t.length > 0);
+                    if (spaceTokens.length > 1) {
+                        return spaceTokens;
+                    }
+                }
+                return tokens;
+            },
+            openMultiRefModal() {
+                if (this.refNumbers.length > 0 && !this.multiRefInput) {
+                    this.multiRefInput = this.refNumbers.join('\n');
+                } else if (!this.multiRefInput) {
+                    const currentSearch = @js(request('search', ''));
+                    if (currentSearch) {
+                        const currentTokens = currentSearch.split(/[\r\n,;]+/).map(t => t.trim()).filter(Boolean);
+                        this.multiRefInput = currentTokens.length > 1 ? currentTokens.join('\n') : currentSearch;
+                    }
+                }
+                this.multiRefModalOpen = true;
+            },
+            closeMultiRefModal() {
+                this.multiRefModalOpen = false;
+            },
+            applyMultiRefSearch() {
+                const tokens = this.detectedRefTokens;
+                if (tokens.length > 0) {
+                    tokens.forEach(t => {
+                        if (!this.refNumbers.includes(t)) {
+                            this.refNumbers.push(t);
+                        }
+                    });
+                    this.multiRefInput = '';
+                    this.multiRefModalOpen = false;
+                    this.submitForm();
+                } else {
+                    this.multiRefModalOpen = false;
+                }
             }
         }
     }

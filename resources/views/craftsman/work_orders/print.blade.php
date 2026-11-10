@@ -86,7 +86,7 @@
                     <div class="space-y-2">
                         <div class="flex items-start">
                             <span class="font-bold w-32 shrink-0">SNo</span>
-                            <span class="font-bold">: {{ $order->id }}</span>
+                            <span class="font-bold">: {{ $order->craftsman_serial_no ?? $order->id }}</span>
                         </div>
                         <div class="flex items-start">
                             <span class="font-bold w-32 shrink-0">Design</span>
