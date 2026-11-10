@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\Craftsman;
+use App\Models\DesignCode;
 use App\Models\WorkOrder;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -16,10 +17,16 @@ class WorkOrderController extends Controller
     /**
      * Unified Work Orders listing.
      * Auto-detects Admin (system-wide view-only with full filters) vs Craftsman (scoped to self).
+     * If filter options are queried (e.g. ?filter=design_code), delegates to filters().
      */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        // If client requested filter options directly via query (e.g. ?type=design_code or ?filter=design_code)
+        if ($this->isFilterOptionsRequest($request)) {
+            return $this->filters($request);
+        }
 
         if ($user instanceof Admin) {
             return $this->adminIndex($request);
@@ -58,6 +65,610 @@ class WorkOrderController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'Unauthorized role.'], 403);
+    }
+
+    /**
+     * Dedicated Endpoint: Design codes only.
+     */
+    public function designCodes(Request $request): JsonResponse
+    {
+        return $this->getDesignCodeFilterResponse($request, $request->user());
+    }
+
+    /**
+     * Dedicated Endpoint: Design nicknames only.
+     */
+    public function nicknames(Request $request): JsonResponse
+    {
+        return $this->getDesignNicknameFilterResponse($request, $request->user());
+    }
+
+    /**
+     * Dedicated Endpoint: Order types only.
+     */
+    public function orderTypes(Request $request): JsonResponse
+    {
+        return $this->getOrderTypeFilterResponse($request, $request->user());
+    }
+
+    /**
+     * Dedicated Endpoint: Product names only.
+     */
+    public function productNames(Request $request): JsonResponse
+    {
+        return $this->getProductNameFilterResponse($request, $request->user());
+    }
+
+    /**
+     * Dedicated Endpoint: Craftsmen directory filter (Admin only).
+     */
+    public function craftsmenFilter(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Admin) {
+            return response()->json([
+                'success' => false,
+                'role'    => 'craftsman',
+                'message' => 'Craftsman filter is available for Admin only.',
+            ], 403);
+        }
+
+        return $this->getCraftsmanFilterResponse($request);
+    }
+
+    /**
+     * Dedicated Endpoint: Categories only.
+     */
+    public function categories(Request $request): JsonResponse
+    {
+        return $this->getCategoryFilterResponse($request, $request->user());
+    }
+
+    /**
+     * Dedicated Endpoint: Subcategories only.
+     */
+    public function subcategories(Request $request): JsonResponse
+    {
+        return $this->getSubcategoryFilterResponse($request, $request->user());
+    }
+
+    /**
+     * Get filter options (design codes, product names, order types, craftsman names for admin only, design nicknames).
+     * When a specific type is requested (e.g. ?type=design_code or ?design_nickname), returns only that filter's list.
+     */
+    public function filters(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $isAdmin = $user instanceof Admin;
+        $isCraftsman = $user instanceof Craftsman;
+
+        if (! $isAdmin && ! $isCraftsman) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized role.'], 403);
+        }
+
+        $normalizedType = $this->resolveFilterType($request);
+
+        // 1. Single Filter Requested
+        if ($normalizedType === 'design_code') {
+            return $this->getDesignCodeFilterResponse($request, $user);
+        }
+
+        if ($normalizedType === 'product_name') {
+            return $this->getProductNameFilterResponse($request, $user);
+        }
+
+        if ($normalizedType === 'order_type') {
+            return $this->getOrderTypeFilterResponse($request, $user);
+        }
+
+        if ($normalizedType === 'craftsman') {
+            // "craftsman name for admin only not craftsman panel"
+            if (! $isAdmin) {
+                return response()->json([
+                    'success' => false,
+                    'role'    => 'craftsman',
+                    'message' => 'Craftsman filter is available for Admin only.',
+                ], 403);
+            }
+
+            return $this->getCraftsmanFilterResponse($request);
+        }
+
+        if ($normalizedType === 'design_nickname') {
+            return $this->getDesignNicknameFilterResponse($request, $user);
+        }
+
+        if ($normalizedType === 'category') {
+            return $this->getCategoryFilterResponse($request, $user);
+        }
+
+        if ($normalizedType === 'subcategory') {
+            return $this->getSubcategoryFilterResponse($request, $user);
+        }
+
+        // 2. All Filter Options
+        return $this->getAllFiltersResponse($request, $user);
+    }
+
+    /**
+     * Check if the incoming request asks for filter options rather than order listings.
+     * Detects explicit filter parameters (?type=design_code) AND direct bare flags (/api/work-orders?design_nickname).
+     */
+    protected function isFilterOptionsRequest(Request $request): bool
+    {
+        if ($request->has('get_filters') || $request->has('filter_options') || $request->has('get_filter') || $request->has('all_filters')) {
+            return true;
+        }
+
+        // 1. Explicit filter/type parameter
+        $explicit = strtolower(trim((string) ($request->input('filter') ?? $request->input('type') ?? $request->input('field') ?? $request->input('get') ?? '')));
+        if ($explicit !== '' && $this->normalizeFilterType($explicit) !== null) {
+            return true;
+        }
+
+        // 2. Direct query parameter flags (e.g. /api/work-orders?design_nickname or ?product_name or ?design_code or ?craftsman_name or ?order_type)
+        $filterKeys = [
+            'design_nickname', 'design_nicknames', 'design_nick_name', 'nickname', 'nicknames', 'nick_name',
+            'product_name', 'product_names', 'product', 'products',
+            'design_code', 'design_codes', 'design', 'designs', 'code', 'codes',
+            'craftsman_name', 'craftsman_names', 'craftsman', 'craftsmen',
+            'order_type', 'order_types', 'ordertype', 'ordertypes',
+            'category', 'categories',
+            'subcategory', 'subcategories',
+        ];
+
+        foreach ($filterKeys as $key) {
+            if ($request->has($key)) {
+                $val = $request->input($key);
+                // If passed as flag without value or flag string (?design_nickname or ?design_nickname= or ?design_nickname=all)
+                if ($val === null || $val === '' || in_array(strtolower(trim((string) $val)), ['1', 'true', 'all', 'yes', 'list', 'filter', 'options'], true)) {
+                    return true;
+                }
+
+                // If passed with search query e.g. /api/work-orders?design_nickname&q=pea
+                if ($request->has('q') || $request->has('search_filter')) {
+                    return true;
+                }
+
+                // If not an order table navigation query (no tab, status, page, per_page, search, ref_no)
+                if (! $request->has('tab') && ! $request->has('status') && ! $request->has('page') && ! $request->has('per_page') && ! $request->has('search') && ! $request->has('ref_no') && ! $request->has('reference_no')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve normalized filter type from request parameters.
+     */
+    protected function resolveFilterType(Request $request): string
+    {
+        // 1. Explicit type/filter parameter
+        $explicit = strtolower(trim((string) (
+            $request->input('type')
+            ?? $request->input('filter')
+            ?? $request->input('field')
+            ?? $request->input('name')
+            ?? $request->input('key')
+            ?? $request->input('get')
+            ?? $request->input('filter_type')
+            ?? ''
+        )));
+
+        if ($explicit !== '') {
+            $normalized = $this->normalizeFilterType($explicit);
+            if ($normalized !== null) {
+                return $normalized;
+            }
+        }
+
+        // 2. Direct query parameter flags (e.g. /api/work-orders?design_nickname or ?product_name or ?design_code or ?craftsman_name or ?order_type)
+        $filterKeyMap = [
+            'design_nickname'  => 'design_nickname',
+            'design_nicknames' => 'design_nickname',
+            'design_nick_name' => 'design_nickname',
+            'nickname'         => 'design_nickname',
+            'nicknames'        => 'design_nickname',
+            'nick_name'        => 'design_nickname',
+            'product_name'     => 'product_name',
+            'product_names'    => 'product_name',
+            'product'          => 'product_name',
+            'products'         => 'product_name',
+            'design_code'      => 'design_code',
+            'design_codes'     => 'design_code',
+            'design'           => 'design_code',
+            'designs'          => 'design_code',
+            'code'             => 'design_code',
+            'codes'            => 'design_code',
+            'craftsman_name'   => 'craftsman',
+            'craftsman_names'  => 'craftsman',
+            'craftsman'        => 'craftsman',
+            'craftsmen'        => 'craftsman',
+            'worker'           => 'craftsman',
+            'workers'          => 'craftsman',
+            'order_type'       => 'order_type',
+            'order_types'      => 'order_type',
+            'ordertype'        => 'order_type',
+            'ordertypes'       => 'order_type',
+            'category'         => 'category',
+            'categories'       => 'category',
+            'subcategory'      => 'subcategory',
+            'subcategories'    => 'subcategory',
+        ];
+
+        foreach ($filterKeyMap as $key => $targetType) {
+            if ($request->has($key)) {
+                $val = trim((string) $request->input($key));
+                if ($val !== '' && ! in_array(strtolower($val), ['1', 'true', 'all', 'yes', 'list', 'filter', 'options'], true)) {
+                    if (! $request->filled('q') && ! $request->filled('search')) {
+                        $request->merge(['q' => $val]);
+                    }
+                }
+                return $targetType;
+            }
+        }
+
+        return 'all';
+    }
+
+    /**
+     * Normalize raw filter type string.
+     */
+    protected function normalizeFilterType(string $type): ?string
+    {
+        $type = strtolower(trim($type));
+        $type = str_replace(['-', ' '], '_', $type);
+
+        return match ($type) {
+            'design', 'designs', 'design_codes', 'design_code', 'code', 'codes' => 'design_code',
+            'product', 'products', 'product_names', 'product_name' => 'product_name',
+            'order_type', 'order_types', 'type', 'types', 'ordertype', 'ordertypes' => 'order_type',
+            'craftsman', 'craftsmen', 'craftsman_name', 'craftsman_names', 'worker', 'workers' => 'craftsman',
+            'nickname', 'nicknames', 'design_nickname', 'design_nicknames', 'design_nick_name', 'nick_name' => 'design_nickname',
+            'category', 'categories' => 'category',
+            'subcategory', 'subcategories' => 'subcategory',
+            'all', 'all_filters', 'filters', 'filter_options' => 'all',
+            default => null,
+        };
+    }
+
+    /**
+     * Filter Option: Design codes only.
+     */
+    protected function getDesignCodeFilterResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+
+        if ($isAdmin) {
+            $query = DesignCode::orderBy('code');
+            if ($request->filled('q') || $request->filled('search')) {
+                $q = trim((string) ($request->q ?? $request->search));
+                $query->where(fn ($sub) => $sub->where('code', 'like', "%{$q}%")->orWhere('nickname', 'like', "%{$q}%"));
+            }
+            $designs = $query->get(['id', 'code', 'nickname']);
+            $codes = $designs->pluck('code')->values();
+        } else {
+            // Craftsman panel: designs assigned to self
+            $query = $user->designCodes()->orderBy('code');
+            if ($request->filled('q') || $request->filled('search')) {
+                $q = trim((string) ($request->q ?? $request->search));
+                $query->where(fn ($sub) => $sub->where('code', 'like', "%{$q}%")->orWhere('nickname', 'like', "%{$q}%"));
+            }
+            $designs = $query->get(['design_codes.id', 'design_codes.code', 'design_codes.nickname']);
+
+            // Fallback to distinct design codes from own work orders if pivot table has none
+            if ($designs->isEmpty()) {
+                $woQuery = WorkOrder::where('craftsman_id', $user->id)
+                    ->whereNotNull('design_code')
+                    ->where('design_code', '!=', '');
+                if ($request->filled('q') || $request->filled('search')) {
+                    $q = trim((string) ($request->q ?? $request->search));
+                    $woQuery->where('design_code', 'like', "%{$q}%");
+                }
+                $codes = $woQuery->distinct()->orderBy('design_code')->pluck('design_code')->values();
+                $designs = $codes->map(fn ($c) => ['code' => $c, 'nickname' => null]);
+            } else {
+                $codes = $designs->pluck('code')->values();
+            }
+        }
+
+        return response()->json([
+            'success'      => true,
+            'role'         => $isAdmin ? 'admin' : 'craftsman',
+            'filter'       => 'design_code',
+            'data'         => $codes,
+            'design_codes' => $codes,
+            'codes'        => $codes,
+            'items'        => $designs,
+        ]);
+    }
+
+    /**
+     * Filter Option: Product names only.
+     */
+    protected function getProductNameFilterResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+        $query = WorkOrder::query();
+
+        if (! $isAdmin) {
+            $query->where('craftsman_id', $user->id);
+        }
+
+        $query->whereNotNull('product_name')->where('product_name', '!=', '');
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $q = trim((string) ($request->q ?? $request->search));
+            $query->where('product_name', 'like', "%{$q}%");
+        }
+
+        $products = $query->distinct()->orderBy('product_name')->pluck('product_name')->values();
+
+        return response()->json([
+            'success'       => true,
+            'role'          => $isAdmin ? 'admin' : 'craftsman',
+            'filter'        => 'product_name',
+            'data'          => $products,
+            'product_names' => $products,
+            'items'         => $products,
+        ]);
+    }
+
+    /**
+     * Filter Option: Order types only.
+     */
+    protected function getOrderTypeFilterResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+        $query = WorkOrder::query();
+
+        if (! $isAdmin) {
+            $query->where('craftsman_id', $user->id);
+        }
+
+        $query->whereNotNull('order_type')->where('order_type', '!=', '');
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $q = trim((string) ($request->q ?? $request->search));
+            $query->where('order_type', 'like', "%{$q}%");
+        }
+
+        $types = $query->distinct()->orderBy('order_type')->pluck('order_type')->values();
+
+        if ($types->isEmpty()) {
+            $types = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+        }
+
+        return response()->json([
+            'success'     => true,
+            'role'        => $isAdmin ? 'admin' : 'craftsman',
+            'filter'      => 'order_type',
+            'data'        => $types,
+            'order_types' => $types,
+            'items'       => $types,
+        ]);
+    }
+
+    /**
+     * Filter Option: Craftsmen only (ADMIN ONLY).
+     */
+    protected function getCraftsmanFilterResponse(Request $request): JsonResponse
+    {
+        $query = Craftsman::where(function ($q) {
+            $q->where('is_active', true)->orWhereNull('is_active');
+        })->orderBy('name');
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $q = trim((string) ($request->q ?? $request->search));
+            $query->where(fn ($sub) => $sub->where('name', 'like', "%{$q}%")->orWhere('mobile', 'like', "%{$q}%"));
+        }
+
+        $craftsmen = $query->get(['id', 'name', 'mobile', 'email']);
+        $names = $craftsmen->pluck('name')->values();
+
+        return response()->json([
+            'success'         => true,
+            'role'            => 'admin',
+            'filter'          => 'craftsman_name',
+            'data'            => $names,
+            'craftsman_names' => $names,
+            'names'           => $names,
+            'craftsmen'       => $craftsmen,
+            'items'           => $craftsmen,
+        ]);
+    }
+
+    /**
+     * Filter Option: Design nicknames only.
+     */
+    protected function getDesignNicknameFilterResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+
+        if ($isAdmin) {
+            $query = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '');
+            if ($request->filled('q') || $request->filled('search')) {
+                $q = trim((string) ($request->q ?? $request->search));
+                $query->where('nickname', 'like', "%{$q}%");
+            }
+            $nicknames = $query->orderBy('nickname')->pluck('nickname')->unique()->values();
+        } else {
+            $query = DesignCode::whereHas('craftsmen', fn ($q) => $q->where('craftsmen.id', $user->id))
+                ->whereNotNull('nickname')
+                ->where('nickname', '!=', '');
+
+            if ($request->filled('q') || $request->filled('search')) {
+                $q = trim((string) ($request->q ?? $request->search));
+                $query->where('nickname', 'like', "%{$q}%");
+            }
+            $nicknames = $query->pluck('nickname')->unique()->values();
+
+            if ($nicknames->isEmpty()) {
+                $woQuery = WorkOrder::where('craftsman_id', $user->id)
+                    ->whereNotNull('design_nickname')
+                    ->where('design_nickname', '!=', '');
+                if ($request->filled('q') || $request->filled('search')) {
+                    $q = trim((string) ($request->q ?? $request->search));
+                    $woQuery->where('design_nickname', 'like', "%{$q}%");
+                }
+                $nicknames = $woQuery->distinct()->pluck('design_nickname')->values();
+            }
+        }
+
+        return response()->json([
+            'success'          => true,
+            'role'             => $isAdmin ? 'admin' : 'craftsman',
+            'filter'           => 'design_nickname',
+            'data'             => $nicknames,
+            'design_nicknames' => $nicknames,
+            'nicknames'        => $nicknames,
+            'items'            => $nicknames,
+        ]);
+    }
+
+    /**
+     * Filter Option: Categories only.
+     */
+    protected function getCategoryFilterResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+        $query = WorkOrder::query();
+
+        if (! $isAdmin) {
+            $query->where('craftsman_id', $user->id);
+        }
+
+        $query->whereNotNull('category')->where('category', '!=', '');
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $q = trim((string) ($request->q ?? $request->search));
+            $query->where('category', 'like', "%{$q}%");
+        }
+
+        $categories = $query->distinct()->orderBy('category')->pluck('category')->values();
+
+        return response()->json([
+            'success'    => true,
+            'role'       => $isAdmin ? 'admin' : 'craftsman',
+            'filter'     => 'category',
+            'data'       => $categories,
+            'categories' => $categories,
+            'items'      => $categories,
+        ]);
+    }
+
+    /**
+     * Filter Option: Subcategories only.
+     */
+    protected function getSubcategoryFilterResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+        $query = WorkOrder::query();
+
+        if (! $isAdmin) {
+            $query->where('craftsman_id', $user->id);
+        }
+
+        $query->whereNotNull('subcategory')->where('subcategory', '!=', '');
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $q = trim((string) ($request->q ?? $request->search));
+            $query->where('subcategory', 'like', "%{$q}%");
+        }
+
+        $subcategories = $query->distinct()->orderBy('subcategory')->pluck('subcategory')->values();
+
+        return response()->json([
+            'success'       => true,
+            'role'          => $isAdmin ? 'admin' : 'craftsman',
+            'filter'        => 'subcategory',
+            'data'          => $subcategories,
+            'subcategories' => $subcategories,
+            'items'         => $subcategories,
+        ]);
+    }
+
+    /**
+     * All Filter Options combined.
+     */
+    protected function getAllFiltersResponse(Request $request, $user): JsonResponse
+    {
+        $isAdmin = $user instanceof Admin;
+
+        if ($isAdmin) {
+            $designCodes = DesignCode::orderBy('code')->get(['id', 'code', 'nickname']);
+            $productNames = WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values();
+            $orderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values();
+            if ($orderTypes->isEmpty()) {
+                $orderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+            }
+            $craftsmen = Craftsman::where(fn ($q) => $q->where('is_active', true)->orWhereNull('is_active'))->orderBy('name')->get(['id', 'name', 'mobile', 'email']);
+            $designNicknames = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->orderBy('nickname')->pluck('nickname')->unique()->values();
+            $categories = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values();
+            $subcategories = WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->orderBy('subcategory')->pluck('subcategory')->values();
+
+            return response()->json([
+                'success' => true,
+                'role'    => 'admin',
+                'data'    => [
+                    'design_codes'     => $designCodes->pluck('code')->values(),
+                    'designs'          => $designCodes,
+                    'product_names'    => $productNames,
+                    'order_types'      => $orderTypes,
+                    'craftsmen'        => $craftsmen, // Admin only!
+                    'design_nicknames' => $designNicknames,
+                    'categories'       => $categories,
+                    'subcategories'    => $subcategories,
+                ],
+            ]);
+        }
+
+        // Craftsman panel
+        $craftsmanDesignCodes = $user->designCodes()->orderBy('code')->get(['design_codes.id', 'design_codes.code', 'design_codes.nickname']);
+        if ($craftsmanDesignCodes->isEmpty()) {
+            $codes = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('design_code')->where('design_code', '!=', '')->distinct()->orderBy('design_code')->pluck('design_code')->values();
+            $designs = $codes->map(fn ($c) => ['code' => $c, 'nickname' => null]);
+            $designCodes = $codes;
+        } else {
+            $designCodes = $craftsmanDesignCodes->pluck('code')->values();
+            $designs = $craftsmanDesignCodes;
+        }
+
+        $productNames = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values();
+        $orderTypes = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values();
+        if ($orderTypes->isEmpty()) {
+            $orderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+        }
+
+        $designNicknames = DesignCode::whereHas('craftsmen', fn ($q) => $q->where('craftsmen.id', $user->id))
+            ->whereNotNull('nickname')
+            ->where('nickname', '!=', '')
+            ->pluck('nickname')
+            ->unique()
+            ->values();
+        if ($designNicknames->isEmpty()) {
+            $designNicknames = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('design_nickname')->where('design_nickname', '!=', '')->distinct()->pluck('design_nickname')->values();
+        }
+
+        $categories = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values();
+        $subcategories = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->orderBy('subcategory')->pluck('subcategory')->values();
+
+        return response()->json([
+            'success' => true,
+            'role'    => 'craftsman',
+            'data'    => [
+                'design_codes'     => $designCodes,
+                'designs'          => $designs,
+                'product_names'    => $productNames,
+                'order_types'      => $orderTypes,
+                'design_nicknames' => $designNicknames,
+                'categories'       => $categories,
+                'subcategories'    => $subcategories,
+                // Craftsmen is deliberately omitted for Craftsman panel
+            ],
+        ]);
     }
 
     /**
@@ -463,6 +1074,142 @@ class WorkOrderController extends Controller
     }
 
     /**
+     * Apply keyword and multi-ref search filters to a work orders query.
+     */
+    protected function applySearchFilter(mixed $query, mixed $search): void
+    {
+        if (blank($search)) {
+            return;
+        }
+
+        if (is_array($search)) {
+            $rawSearch = implode(',', array_filter(array_map('strval', $search)));
+        } else {
+            $rawSearch = trim((string) $search);
+        }
+
+        if ($rawSearch === '') {
+            return;
+        }
+
+        // Check for multiple tokens separated by commas, semicolons, or newlines
+        $multiTokens = preg_split('/[\r\n,;]+/', $rawSearch, -1, PREG_SPLIT_NO_EMPTY);
+        $multiTokens = array_values(array_filter(array_map('trim', $multiTokens)));
+
+        // If only 1 token resulted, check if it contains space-separated tokens resembling reference or work order numbers
+        if (count($multiTokens) === 1) {
+            $spaceTokens = preg_split('/\s+/', $multiTokens[0], -1, PREG_SPLIT_NO_EMPTY);
+            if (count($spaceTokens) > 1 && collect($spaceTokens)->every(fn ($t) => preg_match('/^(REF|WO|\d|[A-Z]{2,}-\d)/i', $t))) {
+                $multiTokens = $spaceTokens;
+            }
+        }
+
+        if (count($multiTokens) > 1) {
+            $query->where(function ($q) use ($multiTokens) {
+                $q->whereIn('reference_no', $multiTokens)
+                    ->orWhereIn('work_order_no', $multiTokens);
+
+                if (count($multiTokens) <= 50) {
+                    foreach ($multiTokens as $token) {
+                        $q->orWhere('reference_no', 'like', "%{$token}%")
+                            ->orWhere('work_order_no', 'like', "%{$token}%")
+                            ->orWhere('design_code', 'like', "%{$token}%")
+                            ->orWhere('product_name', 'like', "%{$token}%");
+                    }
+                }
+            });
+
+            return;
+        }
+
+        // Single search term
+        $query->where(function ($q) use ($rawSearch) {
+            $q->where('work_order_no', 'like', "%{$rawSearch}%")
+                ->orWhere('reference_no', 'like', "%{$rawSearch}%")
+                ->orWhere('product_name', 'like', "%{$rawSearch}%")
+                ->orWhere('design_code', 'like', "%{$rawSearch}%")
+                ->orWhere('design_nickname', 'like', "%{$rawSearch}%")
+                ->orWhere('seal', 'like', "%{$rawSearch}%")
+                ->orWhereHas('craftsman', function ($sub) use ($rawSearch) {
+                    $sub->where('name', 'like', "%{$rawSearch}%")
+                        ->orWhere('mobile', 'like', "%{$rawSearch}%");
+                })
+                ->orWhereExists(function ($sub) use ($rawSearch) {
+                    $sub->select(DB::raw(1))
+                        ->from('design_codes')
+                        ->whereColumn('design_codes.code', 'work_orders.design_code')
+                        ->where('design_codes.nickname', 'like', "%{$rawSearch}%");
+                });
+        });
+    }
+
+    /**
+     * Extract normalized search tokens (for multi-ref tag boxes and badges).
+     */
+    protected function extractSearchTokens(Request $request): array
+    {
+        $raw = $request->input('search') ?? $request->input('ref_no') ?? $request->input('reference_no');
+        if (blank($raw)) {
+            return [];
+        }
+
+        if (is_array($raw)) {
+            $tokens = [];
+            foreach ($raw as $item) {
+                $split = preg_split('/[\r\n,;]+/', (string) $item, -1, PREG_SPLIT_NO_EMPTY);
+                foreach ($split as $t) {
+                    $t = trim($t);
+                    if ($t !== '' && ! in_array($t, $tokens, true)) {
+                        $tokens[] = $t;
+                    }
+                }
+            }
+            return $tokens;
+        }
+
+        $tokens = preg_split('/[\r\n,;]+/', (string) $raw, -1, PREG_SPLIT_NO_EMPTY);
+        $tokens = array_values(array_filter(array_map('trim', $tokens)));
+
+        if (count($tokens) === 1 && str_contains($tokens[0], ' ')) {
+            $spaceTokens = preg_split('/\s+/', $tokens[0], -1, PREG_SPLIT_NO_EMPTY);
+            if (count($spaceTokens) > 1 && collect($spaceTokens)->every(fn ($t) => preg_match('/^(REF|WO|\d|[A-Z]{2,}-\d)/i', $t))) {
+                return array_values(array_filter(array_map('trim', $spaceTokens)));
+            }
+        }
+
+        return $tokens;
+    }
+
+    /**
+     * Apply explicit reference number filter (supports single, array, comma/newline/space separated).
+     */
+    protected function applyRefNoFilter(mixed $query, mixed $referenceNo): void
+    {
+        if (blank($referenceNo)) {
+            return;
+        }
+
+        $refs = is_array($referenceNo)
+            ? $referenceNo
+            : preg_split('/[\r\n,;\s]+/', (string) $referenceNo, -1, PREG_SPLIT_NO_EMPTY);
+        $refs = array_values(array_filter(array_map('trim', $refs)));
+
+        if (! empty($refs)) {
+            $query->where(function ($q) use ($refs) {
+                $q->whereIn('reference_no', $refs)
+                    ->orWhereIn('work_order_no', $refs);
+
+                if (count($refs) <= 50) {
+                    foreach ($refs as $r) {
+                        $q->orWhere('reference_no', 'like', "%{$r}%")
+                            ->orWhere('work_order_no', 'like', "%{$r}%");
+                    }
+                }
+            });
+        }
+    }
+
+    /**
      * Internal: Admin listing logic.
      */
     protected function adminIndex(Request $request): JsonResponse
@@ -472,29 +1219,57 @@ class WorkOrderController extends Controller
 
         $query = WorkOrder::with('craftsman');
 
+        // 1. Reference number filter (supports ref_no, reference_no, array, comma/space separated)
+        $refInput = $request->input('ref_no') ?? $request->input('reference_no');
+        if (! blank($refInput)) {
+            $this->applyRefNoFilter($query, $refInput);
+        }
+
+        // 2. Keyword & multi-token search
         if ($request->filled('search')) {
-            $search = trim($request->search);
-            $query->where(function ($q) use ($search) {
-                $q->where('work_order_no', 'like', "%{$search}%")
-                    ->orWhere('reference_no', 'like', "%{$search}%")
-                    ->orWhere('design_code', 'like', "%{$search}%")
-                    ->orWhere('product_name', 'like', "%{$search}%")
-                    ->orWhere('design_nickname', 'like', "%{$search}%")
-                    ->orWhereHas('craftsman', function ($sub) use ($search) {
-                        $sub->where('name', 'like', "%{$search}%")
-                            ->orWhere('mobile', 'like', "%{$search}%");
+            $this->applySearchFilter($query, $request->search);
+        }
+
+        // 3. Dropdown Filters
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        if ($request->filled('subcategory')) {
+            $query->where('subcategory', $request->subcategory);
+        }
+
+        if ($request->filled('craftsman_id')) {
+            $craftsmanId = (int) $request->craftsman_id;
+            $query->where(function ($q) use ($craftsmanId) {
+                $q->where('craftsman_id', $craftsmanId)
+                    ->orWhereExists(function ($sub) use ($craftsmanId) {
+                        $sub->select(DB::raw(1))
+                            ->from('design_codes')
+                            ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                            ->whereColumn('design_codes.code', 'work_orders.design_code')
+                            ->where('craftsman_design_code.craftsman_id', $craftsmanId);
                     });
             });
         }
 
-        if ($request->filled('category')) $query->where('category', $request->category);
-        if ($request->filled('subcategory')) $query->where('subcategory', $request->subcategory);
-        if ($request->filled('craftsman_id')) $query->where('craftsman_id', $request->craftsman_id);
-        if ($request->filled('design_code')) $query->where('design_code', $request->design_code);
-        if ($request->filled('product_name')) $query->where('product_name', $request->product_name);
-        if ($request->filled('order_type')) $query->where('order_type', $request->order_type);
-        if ($request->filled('from_date')) $query->whereDate('created_at', '>=', $request->from_date);
-        if ($request->filled('to_date')) $query->whereDate('created_at', '<=', $request->to_date);
+        if ($request->filled('design_code')) {
+            $query->where('design_code', $request->design_code);
+        }
+
+        if ($request->filled('product_name')) {
+            $query->where('product_name', 'like', "%" . trim($request->product_name) . "%");
+        }
+
+        $orderTypeInput = $request->input('order_type');
+        if (! empty($orderTypeInput)) {
+            $types = is_array($orderTypeInput)
+                ? $orderTypeInput
+                : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
+            if (! empty($types)) {
+                $query->whereIn('order_type', $types);
+            }
+        }
 
         if ($request->filled('nickname')) {
             $nickFilter = trim($request->nickname);
@@ -507,6 +1282,31 @@ class WorkOrderController extends Controller
                             ->where('design_codes.nickname', $nickFilter);
                     });
             });
+        }
+
+        // 4. Date Filters
+        $fromDate = $request->input('from_date') ?? $request->input('date_from');
+        if (! blank($fromDate)) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+
+        $toDate = $request->input('to_date') ?? $request->input('date_to');
+        if (! blank($toDate)) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        if ($request->filled('due_date_from')) {
+            $query->whereDate('due_date', '>=', $request->due_date_from);
+        }
+        if ($request->filled('due_date_to')) {
+            $query->whereDate('due_date', '<=', $request->due_date_to);
+        }
+
+        if ($request->filled('return_due_date_from')) {
+            $query->whereDate('return_due_date', '>=', $request->return_due_date_from);
+        }
+        if ($request->filled('return_due_date_to')) {
+            $query->whereDate('return_due_date', '<=', $request->return_due_date_to);
         }
 
         $baseQuery = clone $query;
@@ -537,16 +1337,38 @@ class WorkOrderController extends Controller
         $perPage = $this->resolvePerPage($request, 15);
         $paginator = $query->latest('id')->paginate($perPage)->withQueryString();
 
+        $items = $paginator->getCollection()->map(fn (WorkOrder $order) => $this->transformWorkOrder($order, $request->user()));
+        $pagination = $this->formatPagination($paginator);
+
+        $searchTokens = $this->extractSearchTokens($request);
+
+        $filterOptions = [
+            'design_codes'     => DesignCode::orderBy('code')->pluck('code')->values(),
+            'product_names'    => WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values(),
+            'order_types'      => WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values(),
+            'craftsmen'        => Craftsman::where(fn ($q) => $q->where('is_active', true)->orWhereNull('is_active'))->orderBy('name')->get(['id', 'name', 'mobile']),
+            'design_nicknames' => DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->orderBy('nickname')->pluck('nickname')->unique()->values(),
+            'categories'       => WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values(),
+            'subcategories'    => WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->orderBy('subcategory')->pluck('subcategory')->values(),
+        ];
+        if ($filterOptions['order_types']->isEmpty()) {
+            $filterOptions['order_types'] = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+        }
+
         return response()->json([
             'success' => true,
             'role'    => 'admin',
-            'data'    => [
-                'current_tab' => $currentTab,
-                'counts'      => $counts,
-                'tabs'        => $tabs,
-                'items'       => $paginator->getCollection()->map(fn (WorkOrder $order) => $this->transformWorkOrder($order, $request->user())),
-                'pagination'  => $this->formatPagination($paginator),
-            ],
+            'data'    => array_merge([
+                'current_tab'        => $currentTab,
+                'counts'             => $counts,
+                'tabs'               => $tabs,
+                'search_tokens'      => $searchTokens,
+                'search_token_count' => count($searchTokens),
+                'filter_options'     => $filterOptions,
+                'filters'            => $filterOptions,
+                'items'              => $items,
+                'data'               => $items,
+            ], $pagination),
         ]);
     }
 
@@ -560,21 +1382,42 @@ class WorkOrderController extends Controller
 
         $query = WorkOrder::where('craftsman_id', $craftsman->id);
 
-        if ($request->filled('search')) {
-            $search = trim($request->search);
-            $query->where(function ($q) use ($search) {
-                $q->where('work_order_no', 'like', "%{$search}%")
-                    ->orWhere('reference_no', 'like', "%{$search}%")
-                    ->orWhere('design_code', 'like', "%{$search}%")
-                    ->orWhere('product_name', 'like', "%{$search}%")
-                    ->orWhere('design_nickname', 'like', "%{$search}%");
-            });
+        // 1. Reference number filter (supports ref_no, reference_no, array, comma/space separated)
+        $refInput = $request->input('ref_no') ?? $request->input('reference_no');
+        if (! blank($refInput)) {
+            $this->applyRefNoFilter($query, $refInput);
         }
 
-        if ($request->filled('design_code')) $query->where('design_code', $request->design_code);
-        if ($request->filled('product_name')) $query->where('product_name', $request->product_name);
-        if ($request->filled('date_from')) $query->whereDate('created_at', '>=', $request->date_from);
-        if ($request->filled('date_to')) $query->whereDate('created_at', '<=', $request->date_to);
+        // 2. Keyword & multi-token search
+        if ($request->filled('search')) {
+            $this->applySearchFilter($query, $request->search);
+        }
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        if ($request->filled('subcategory')) {
+            $query->where('subcategory', $request->subcategory);
+        }
+
+        if ($request->filled('design_code')) {
+            $query->where('design_code', $request->design_code);
+        }
+
+        if ($request->filled('product_name')) {
+            $query->where('product_name', 'like', "%" . trim($request->product_name) . "%");
+        }
+
+        $orderTypeInput = $request->input('order_type');
+        if (! empty($orderTypeInput)) {
+            $types = is_array($orderTypeInput)
+                ? $orderTypeInput
+                : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
+            if (! empty($types)) {
+                $query->whereIn('order_type', $types);
+            }
+        }
 
         if ($request->filled('nickname')) {
             $nickname = trim($request->nickname);
@@ -584,6 +1427,30 @@ class WorkOrderController extends Controller
                         $sub->select('code')->from('design_codes')->where('nickname', $nickname);
                     });
             });
+        }
+
+        $fromDate = $request->input('from_date') ?? $request->input('date_from');
+        if (! blank($fromDate)) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+
+        $toDate = $request->input('to_date') ?? $request->input('date_to');
+        if (! blank($toDate)) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        if ($request->filled('due_date_from')) {
+            $query->whereDate('due_date', '>=', $request->due_date_from);
+        }
+        if ($request->filled('due_date_to')) {
+            $query->whereDate('due_date', '<=', $request->due_date_to);
+        }
+
+        if ($request->filled('return_due_date_from')) {
+            $query->whereDate('return_due_date', '>=', $request->return_due_date_from);
+        }
+        if ($request->filled('return_due_date_to')) {
+            $query->whereDate('return_due_date', '<=', $request->return_due_date_to);
         }
 
         $baseQuery = clone $query;
@@ -615,16 +1482,43 @@ class WorkOrderController extends Controller
         $perPage = $this->resolvePerPage($request, 15);
         $paginator = $query->latest('id')->paginate($perPage)->withQueryString();
 
+        $items = $paginator->getCollection()->map(fn (WorkOrder $order) => $this->transformWorkOrder($order, $craftsman));
+        $pagination = $this->formatPagination($paginator);
+
+        $searchTokens = $this->extractSearchTokens($request);
+
+        $craftsmanFilterOptions = [
+            'design_codes'     => $craftsman->designCodes()->orderBy('code')->pluck('code')->values(),
+            'product_names'    => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values(),
+            'order_types'      => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values(),
+            'design_nicknames' => DesignCode::whereHas('craftsmen', fn ($q) => $q->where('craftsmen.id', $craftsman->id))->whereNotNull('nickname')->where('nickname', '!=', '')->pluck('nickname')->unique()->values(),
+            'categories'       => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values(),
+            'subcategories'    => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->orderBy('subcategory')->pluck('subcategory')->values(),
+        ];
+        if ($craftsmanFilterOptions['order_types']->isEmpty()) {
+            $craftsmanFilterOptions['order_types'] = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+        }
+        if ($craftsmanFilterOptions['design_codes']->isEmpty()) {
+            $craftsmanFilterOptions['design_codes'] = WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('design_code')->where('design_code', '!=', '')->distinct()->orderBy('design_code')->pluck('design_code')->values();
+        }
+        if ($craftsmanFilterOptions['design_nicknames']->isEmpty()) {
+            $craftsmanFilterOptions['design_nicknames'] = WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('design_nickname')->where('design_nickname', '!=', '')->distinct()->pluck('design_nickname')->values();
+        }
+
         return response()->json([
             'success' => true,
             'role'    => 'craftsman',
-            'data'    => [
-                'current_tab' => $currentTab,
-                'counts'      => $counts,
-                'tabs'        => $tabs,
-                'items'       => $paginator->getCollection()->map(fn (WorkOrder $order) => $this->transformWorkOrder($order, $craftsman)),
-                'pagination'  => $this->formatPagination($paginator),
-            ],
+            'data'    => array_merge([
+                'current_tab'        => $currentTab,
+                'counts'             => $counts,
+                'tabs'               => $tabs,
+                'search_tokens'      => $searchTokens,
+                'search_token_count' => count($searchTokens),
+                'filter_options'     => $craftsmanFilterOptions,
+                'filters'            => $craftsmanFilterOptions,
+                'items'              => $items,
+                'data'               => $items,
+            ], $pagination),
         ]);
     }
 
@@ -708,6 +1602,61 @@ class WorkOrderController extends Controller
 
         if ($baseQuery === null) {
             $baseQuery = WorkOrder::query();
+
+            $refInput = $request->input('ref_no') ?? $request->input('reference_no');
+            if (! blank($refInput)) {
+                $this->applyRefNoFilter($baseQuery, $refInput);
+            }
+            if ($request->filled('search')) {
+                $this->applySearchFilter($baseQuery, $request->search);
+            }
+            if ($request->filled('category')) {
+                $baseQuery->where('category', $request->category);
+            }
+            if ($request->filled('subcategory')) {
+                $baseQuery->where('subcategory', $request->subcategory);
+            }
+            if ($request->filled('craftsman_id')) {
+                $craftsmanId = (int) $request->craftsman_id;
+                $baseQuery->where(function ($q) use ($craftsmanId) {
+                    $q->where('craftsman_id', $craftsmanId)
+                        ->orWhereExists(function ($sub) use ($craftsmanId) {
+                            $sub->select(DB::raw(1))->from('design_codes')
+                                ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                                ->whereColumn('design_codes.code', 'work_orders.design_code')
+                                ->where('craftsman_design_code.craftsman_id', $craftsmanId);
+                        });
+                });
+            }
+            if ($request->filled('design_code')) {
+                $baseQuery->where('design_code', $request->design_code);
+            }
+            if ($request->filled('product_name')) {
+                $baseQuery->where('product_name', 'like', "%" . trim($request->product_name) . "%");
+            }
+            $orderTypeInput = $request->input('order_type');
+            if (! empty($orderTypeInput)) {
+                $types = is_array($orderTypeInput)
+                    ? $orderTypeInput
+                    : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
+                if (! empty($types)) {
+                    $baseQuery->whereIn('order_type', $types);
+                }
+            }
+            $fromDate = $request->input('from_date') ?? $request->input('date_from');
+            if (! blank($fromDate)) {
+                $baseQuery->whereDate('created_at', '>=', $fromDate);
+            }
+            $toDate = $request->input('to_date') ?? $request->input('date_to');
+            if (! blank($toDate)) {
+                $baseQuery->whereDate('created_at', '<=', $toDate);
+            }
+            if ($request->filled('due_date_from')) {
+                $baseQuery->whereDate('due_date', '>=', $request->due_date_from);
+            }
+            if ($request->filled('due_date_to')) {
+                $baseQuery->whereDate('due_date', '<=', $request->due_date_to);
+            }
         }
 
         $counts = [
@@ -829,6 +1778,58 @@ class WorkOrderController extends Controller
 
         if ($baseQuery === null) {
             $baseQuery = WorkOrder::where('craftsman_id', $craftsman->id);
+
+            $refInput = $request->input('ref_no') ?? $request->input('reference_no');
+            if (! blank($refInput)) {
+                $this->applyRefNoFilter($baseQuery, $refInput);
+            }
+            if ($request->filled('search')) {
+                $this->applySearchFilter($baseQuery, $request->search);
+            }
+            if ($request->filled('category')) {
+                $baseQuery->where('category', $request->category);
+            }
+            if ($request->filled('subcategory')) {
+                $baseQuery->where('subcategory', $request->subcategory);
+            }
+            if ($request->filled('design_code')) {
+                $baseQuery->where('design_code', $request->design_code);
+            }
+            if ($request->filled('product_name')) {
+                $baseQuery->where('product_name', 'like', "%" . trim($request->product_name) . "%");
+            }
+            $orderTypeInput = $request->input('order_type');
+            if (! empty($orderTypeInput)) {
+                $types = is_array($orderTypeInput)
+                    ? $orderTypeInput
+                    : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
+                if (! empty($types)) {
+                    $baseQuery->whereIn('order_type', $types);
+                }
+            }
+            if ($request->filled('nickname')) {
+                $nickname = trim($request->nickname);
+                $baseQuery->where(function ($q) use ($nickname) {
+                    $q->where('design_nickname', $nickname)
+                        ->orWhereIn('design_code', function ($sub) use ($nickname) {
+                            $sub->select('code')->from('design_codes')->where('nickname', $nickname);
+                        });
+                });
+            }
+            $fromDate = $request->input('from_date') ?? $request->input('date_from');
+            if (! blank($fromDate)) {
+                $baseQuery->whereDate('created_at', '>=', $fromDate);
+            }
+            $toDate = $request->input('to_date') ?? $request->input('date_to');
+            if (! blank($toDate)) {
+                $baseQuery->whereDate('created_at', '<=', $toDate);
+            }
+            if ($request->filled('due_date_from')) {
+                $baseQuery->whereDate('due_date', '>=', $request->due_date_from);
+            }
+            if ($request->filled('due_date_to')) {
+                $baseQuery->whereDate('due_date', '<=', $request->due_date_to);
+            }
         }
 
         $counts = [

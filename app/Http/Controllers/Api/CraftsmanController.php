@@ -66,13 +66,15 @@ class CraftsmanController extends Controller
             'created_at'            => $c->created_at?->timezone('Asia/Kolkata')->format('d M Y'),
         ]);
 
+        $pagination = $this->formatPagination($paginator);
+
         return response()->json([
             'success' => true,
             'role'    => 'admin',
-            'data'    => [
-                'items'      => $items,
-                'pagination' => $this->formatPagination($paginator),
-            ],
+            'data'    => array_merge([
+                'items' => $items,
+                'data'  => $items,
+            ], $pagination),
         ]);
     }
 
@@ -86,20 +88,26 @@ class CraftsmanController extends Controller
     }
 
     /**
-     * Format pagination metadata with navigation URLs and item boundaries.
+     * Format pagination metadata with navigation URLs and item boundaries matching standard Laravel paginator.
      */
     protected function formatPagination($paginator): array
     {
         return [
             'current_page'   => $paginator->currentPage(),
+            'first_page_url' => $paginator->url(1),
+            'from'           => $paginator->firstItem(),
             'last_page'      => $paginator->lastPage(),
-            'per_page'       => $paginator->perPage(),
-            'total'          => $paginator->total(),
-            'from'           => $paginator->firstItem() ?? 0,
-            'to'             => $paginator->lastItem() ?? 0,
-            'has_more_pages' => $paginator->hasMorePages(),
+            'last_page_url'  => $paginator->url($paginator->lastPage()),
+            'links'          => method_exists($paginator, 'linkCollection')
+                ? $paginator->linkCollection()->toArray()
+                : [],
             'next_page_url'  => $paginator->nextPageUrl(),
+            'path'           => $paginator->path(),
+            'per_page'       => $paginator->perPage(),
             'prev_page_url'  => $paginator->previousPageUrl(),
+            'to'             => $paginator->lastItem(),
+            'total'          => $paginator->total(),
+            'has_more_pages' => $paginator->hasMorePages(),
         ];
     }
 

@@ -252,6 +252,26 @@ class WorkOrderController extends Controller
 
         session(['admin_work_orders_url' => request()->fullUrl()]);
 
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'role'    => 'admin',
+                'data'    => [
+                    'work_orders'          => $workOrders,
+                    'counts'               => $counts,
+                    'current_tab'          => $currentTab,
+                    'categories'           => $categories,
+                    'subcategories'        => $subcategories,
+                    'nicknames'            => $nicknames,
+                    'order_types'          => $orderTypes,
+                    'selected_order_types' => $selectedOrderTypes,
+                    'craftsmen'            => $craftsmen,
+                    'design_codes'         => $designCodes,
+                    'product_names'        => $productNames,
+                ],
+            ]);
+        }
+
         return view('admin.work_orders.index', compact(
             'workOrders',
             'counts',
@@ -1244,13 +1264,21 @@ class WorkOrderController extends Controller
     /**
      * Apply keyword and multi-ref search filters to a work orders query.
      */
-    protected function applySearchFilter(mixed $query, ?string $search): void
+    protected function applySearchFilter(mixed $query, mixed $search): void
     {
         if (blank($search)) {
             return;
         }
 
-        $rawSearch = trim((string) $search);
+        if (is_array($search)) {
+            $rawSearch = implode(',', array_filter(array_map('strval', $search)));
+        } else {
+            $rawSearch = trim((string) $search);
+        }
+
+        if ($rawSearch === '') {
+            return;
+        }
 
         // Check for multiple tokens separated by commas, semicolons, or newlines
         $multiTokens = preg_split('/[\r\n,;]+/', $rawSearch, -1, PREG_SPLIT_NO_EMPTY);
