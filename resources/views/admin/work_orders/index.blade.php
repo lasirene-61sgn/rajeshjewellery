@@ -459,17 +459,15 @@
                 </button>
             @endif
 
-            @if(in_array($currentTab, ['allocated', 'in_process', 'partially_completed', 'for_approval']))
-                <form method="POST" action="{{ route('admin.work_orders.bulk-complete') }}" onsubmit="return confirm('Are you sure you want to mark the selected orders as completed?')" class="flex items-center">
-                    @csrf
-                    <template x-for="id in selectedOrders" :key="id">
-                        <input type="hidden" name="order_ids[]" :value="id">
-                    </template>
-                    <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm">
-                        Bulk Complete
-                    </button>
-                </form>
-            @endif
+            <form method="POST" action="{{ route('admin.work_orders.bulk-print') }}" class="flex items-center" target="_blank">
+                @csrf
+                <template x-for="id in selectedOrders" :key="id">
+                    <input type="hidden" name="order_ids[]" :value="id">
+                </template>
+                <button type="submit" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm">
+                    Bulk Print
+                </button>
+            </form>
 
             <form method="POST" action="{{ route('admin.work_orders.bulk-export') }}" class="flex items-center">
                 @csrf
@@ -484,15 +482,18 @@
                 </button>
             </form>
 
-            <form method="POST" action="{{ route('admin.work_orders.bulk-print') }}" class="flex items-center" target="_blank">
-                @csrf
-                <template x-for="id in selectedOrders" :key="id">
-                    <input type="hidden" name="order_ids[]" :value="id">
-                </template>
-                <button type="submit" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-sm">
-                    Bulk Print
-                </button>
-            </form>
+            
+            @if(in_array($currentTab, ['allocated', 'in_process', 'partially_completed', 'for_approval']))
+                <form method="POST" action="{{ route('admin.work_orders.bulk-complete') }}" onsubmit="return confirm('Are you sure you want to mark the selected orders as completed?')" class="flex items-center">
+                    @csrf
+                    <template x-for="id in selectedOrders" :key="id">
+                        <input type="hidden" name="order_ids[]" :value="id">
+                    </template>
+                    <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm">
+                        Bulk Complete
+                    </button>
+                </form>
+            @endif
         </div>
     </div>
 
@@ -539,13 +540,13 @@
                             <td class="px-4 py-3">
                                 <div class="relative w-12 h-12">
                                     @if($order->design_image)
-                                        <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}', {{ $order->has_seal ? 'true' : 'false' }})" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
+                                        <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}', {{ ($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal)) ? 'true' : 'false' }})" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
                                     @else
                                         <div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-medium border border-slate-200">
                                             N/A
                                         </div>
                                     @endif
-                                    @if($order->has_seal)
+                                    @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                                         <span class="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow leading-none uppercase tracking-wider border border-white">
                                             916
                                         </span>

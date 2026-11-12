@@ -70,8 +70,8 @@
                 @endif
 
                 <!-- 916 Seal positioned at the bottom center of the image container -->
-                @if($order->has_seal)
-                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black text-base px-5 py-1.5 rounded shadow uppercase tracking-wider border border-red-900 whitespace-nowrap">
+                @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
+                <div style="background-color: #dc2626 !important; color: #ffffff !important; border: 3px solid #7f1d1d !important;" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black text-base sm:text-lg px-6 py-2 rounded-lg shadow-xl uppercase tracking-widest border-2 border-red-950 text-center whitespace-nowrap z-20">
                     NEED 916 SEAL ONLY
                 </div>
                 @endif
@@ -79,6 +79,12 @@
 
             <!-- Specifications Data Table -->
             <div class="w-full pt-4 text-base leading-relaxed text-black border-t-2 border-black">
+                <!-- @if($order->status === 'partially_completed' || ($order->completed_quantity ?? 0) > 0)
+                <div style="background-color: #faf5ff !important; border: 2px solid #7e22ce !important; color: #581c87 !important;" class="w-full text-center py-1.5 px-3 mb-2 rounded font-black text-sm uppercase tracking-wider border-2 border-purple-600 bg-purple-50 text-purple-900">
+                    PARTIALLY COMPLETED &mdash; COMPLETED: {{ $order->completed_quantity ?? 0 }} / {{ $order->quantity }} | BALANCE TO DO: {{ $order->balance_quantity }} {{ $order->unit_type ?? 'PCS' }}
+                </div>
+                @endif -->
+
                 <div class="grid grid-cols-2 gap-x-12 gap-y-2 pt-1">
 
                     <!-- Left Column -->
@@ -99,6 +105,16 @@
                             <span class="font-bold w-32 shrink-0">Order Date</span>
                             <span class="font-bold">: {{ $order->created_at->format('d/m/Y') }}</span>
                         </div>
+                         <div class="flex items-start">
+                            <span class="font-bold w-28 shrink-0">Due Date</span>
+                            <span class="font-bold">: {{ isset($order->due_date) ? \Carbon\Carbon::parse($order->due_date)->format('d/m/Y') : '' }}</span>
+                        </div>
+                        <!-- @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
+                        <div class="flex items-start">
+                            <span class="font-bold w-32 shrink-0">Seal</span>
+                            <span class="font-black text-red-600">: 916 SEAL (NEED 916 SEAL ONLY)</span>
+                        </div>
+                        @endif -->
                     </div>
 
                     <!-- Right Column -->
@@ -111,14 +127,26 @@
                             <span class="font-bold w-28 shrink-0">Size</span>
                             <span class="font-bold">: {{ $order->size ?? 'N/A' }}</span>
                         </div>
+                        @if($order->status === 'partially_completed' || ($order->completed_quantity ?? 0) > 0)
+                        <div class="flex items-start">
+                            <span class="font-bold w-28 shrink-0">Total Qty</span>
+                            <span class="font-bold">: {{ $order->quantity }} {{ $order->unit_type ?? 'PCS' }}</span>
+                        </div>
+                        <div class="flex items-start text-emerald-800">
+                            <span class="font-bold w-28 shrink-0">Completed</span>
+                            <span class="font-bold">: {{ $order->completed_quantity ?? 0 }} {{ $order->unit_type ?? 'PCS' }}</span>
+                        </div>
+                        <div class="flex items-start text-purple-900 font-extrabold text-lg">
+                            <span class="font-bold w-28 shrink-0">Balance</span>
+                            <span class="font-bold">: {{ $order->balance_quantity }} {{ $order->unit_type ?? 'PCS' }}</span>
+                        </div>
+                        @else
                         <div class="flex items-start">
                             <span class="font-bold w-28 shrink-0">Qty</span>
-                            <span class="font-bold">: {{ $order->quantity }}</span>
+                            <span class="font-bold">: {{ $order->quantity }} {{ $order->unit_type ?? 'PCS' }}</span>
                         </div>
-                        <div class="flex items-start">
-                            <span class="font-bold w-28 shrink-0">Due Date</span>
-                            <span class="font-bold">: {{ isset($order->due_date) ? \Carbon\Carbon::parse($order->due_date)->format('d/m/Y') : '' }}</span>
-                        </div>
+                        @endif
+                       
                     </div>
 
                 </div>

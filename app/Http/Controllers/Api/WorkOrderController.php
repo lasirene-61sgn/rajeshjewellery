@@ -1024,6 +1024,75 @@ class WorkOrderController extends Controller
     }
 
     /**
+     * Print slip for a single work order (returns HTML or JSON print data).
+     */
+    public function print(Request $request, WorkOrder $workOrder): mixed
+    {
+        $user = $request->user();
+
+        if ($user instanceof Craftsman && $workOrder->craftsman_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. This work order is not assigned to you.',
+            ], 403);
+        }
+
+        $workOrder->load('craftsman');
+        $workOrders = collect([$workOrder]);
+        $viewName = ($user instanceof Craftsman) ? 'craftsman.work_orders.print' : 'admin.work_orders.print';
+
+        if ($request->wantsJson() || $request->query('format') === 'json') {
+            return response()->json([
+                'success'    => true,
+                'work_order' => $this->transformWorkOrder($workOrder, $user),
+                'print_html' => view($viewName, compact('workOrders', 'workOrder'))->render(),
+            ]);
+        }
+
+        return view($viewName, compact('workOrders', 'workOrder'));
+    }
+
+    /**
+     * Bulk print slips for multiple work orders.
+     */
+    public function bulkPrint(Request $request): mixed
+    {
+        $validated = $request->validate([
+            'order_ids'   => ['required', 'array'],
+            'order_ids.*' => ['exists:work_orders,id'],
+        ]);
+
+        $user = $request->user();
+        $query = WorkOrder::with('craftsman')->whereIn('id', $validated['order_ids']);
+
+        if ($user instanceof Craftsman) {
+            $query->where('craftsman_id', $user->id);
+        }
+
+        $workOrders = $query->get();
+
+        if ($workOrders->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No matching work orders found.',
+            ], 404);
+        }
+
+        $viewName = ($user instanceof Craftsman) ? 'craftsman.work_orders.print' : 'admin.work_orders.print';
+
+        if ($request->wantsJson() || $request->query('format') === 'json') {
+            return response()->json([
+                'success'     => true,
+                'count'       => $workOrders->count(),
+                'work_orders' => $workOrders->map(fn ($wo) => $this->transformWorkOrder($wo, $user)),
+                'print_html'  => view($viewName, compact('workOrders'))->render(),
+            ]);
+        }
+
+        return view($viewName, compact('workOrders'));
+    }
+
+    /**
      * Resolve and normalize tab parameter from request (supports tab, tabs, status).
      */
     protected function resolveTab(Request $request, string $default): string
@@ -1554,11 +1623,12 @@ class WorkOrderController extends Controller
             'unit_type'           => $order->unit_type ?? 'PCS',
             'hallmark_purity'     => $order->hallmark_purity,
             'target_weight'       => (float) $order->target_weight,
-            'seal'                => $order->seal,
-            'has_seal'            => (bool) $order->has_seal,
+            'seal'                => $order->seal ?? (stripos((string) $order->reference_no, 'ESO') !== false ? '916' : null),
+            'has_seal'            => (bool) ($order->has_seal || stripos((string) $order->reference_no, 'ESO') !== false || !empty($order->seal)),
             'job_type'            => $order->job_type,
             'order_type'          => $order->order_type,
             'status'              => $order->status,
+            'is_partially_completed' => ($order->status === 'partially_completed' || ($order->completed_quantity ?? 0) > 0),
             'is_returned'         => $isReturned,
             'display_status'      => $isReturned ? 'Returned' : ucfirst(str_replace('_', ' ', $order->status)),
             'is_overdue'          => $isOverdue,
@@ -1571,6 +1641,7 @@ class WorkOrderController extends Controller
             'reject_reason'       => $order->reject_reason,
             'design_image_url'    => $order->design_image ? url('storage/' . $order->design_image) : null,
             'return_image_url'    => $order->return_image ? url('storage/' . $order->return_image) : null,
+            'print_url'           => url('/api/work-orders/' . $order->id . '/print'),
             'craftsman'           => $order->craftsman ? [
                 'id'     => $order->craftsman->id,
                 'name'   => $order->craftsman->name,

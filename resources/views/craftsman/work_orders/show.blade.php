@@ -10,7 +10,7 @@
         <div>
             <div class="flex flex-wrap items-center gap-2">
                 <h1 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">{{ $workOrder->reference_no }}</h1>
-                @if($workOrder->has_seal)
+                @if($workOrder->has_seal || stripos((string)$workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
                     <span class="px-2 py-0.5 bg-amber-500 text-white rounded text-xs font-black uppercase tracking-wider shadow-sm">
                         916 SEAL
                     </span>
@@ -44,6 +44,10 @@
                     </button>
                 </form>
             @endif
+            <a href="{{ route('craftsman.work-orders.print', $workOrder) }}" target="_blank" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 text-center">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                <span>Print Slip</span>
+            </a>
             <a href="{{ $backUrl }}" class="px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 shadow-sm transition-all text-center">Back</a>
         </div>
     </div>
@@ -92,7 +96,7 @@
                     @else
                         <div class="text-stone-400 text-xs font-bold">No Design Image</div>
                     @endif
-                    @if($workOrder->has_seal)
+                    @if($workOrder->has_seal || stripos((string)$workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
                         <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider">
                             916 SEAL
                         </span>

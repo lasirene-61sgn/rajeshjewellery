@@ -326,7 +326,7 @@
                             <div class="text-slate-300 text-xs font-bold">N/A</div>
                             @endif
                             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                            @if($order->has_seal)
+                            @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                             <span class="absolute bottom-2 right-2 z-10 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow uppercase tracking-wider flex items-center gap-0.5">
                                 916 SEAL
                             </span>
@@ -347,15 +347,21 @@
                                 <span class="text-xs font-extrabold text-amber-600">Weight : {{ number_format($order->target_weight, 3) }}g</span>
                             </div>
                             <div class="flex justify-between items-baseline pt-1">
-                                <span class="text-xs font-bold text-slate-800 truncate">Size : {{ $order->size }}</span>
-                                <span class="text-xs font-extrabold text-amber-600">QTY : {{ ($order->job_type) }}</span>
+                                <span class="text-xs font-bold text-slate-800 truncate">Size : {{ $order->size ?? 'N/A' }}</span>
+                                <span class="text-xs font-extrabold text-amber-600">
+                                    @if($order->status === 'partially_completed' || ($order->completed_quantity ?? 0) > 0)
+                                        QTY: {{ $order->quantity }} (Done: {{ $order->completed_quantity ?? 0 }} | Bal: {{ $order->balance_quantity }})
+                                    @else
+                                        QTY : {{ $order->quantity }} {{ $order->unit_type ?? 'PCS' }}
+                                    @endif
+                                </span>
                             </div>
                             <div class="text-[10px] text-slate-500 flex justify-between pt-2 border-t border-slate-100">
                                 <div class="flex items-center gap-1 min-w-0">
                                     <span class="font-semibold truncate">{{ $order->reference_no }}</span>
-                                    <!-- @if($order->has_seal)
+                                    @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                                         <span class="px-1 py-0.2 bg-amber-500 text-white rounded text-[8px] font-black uppercase tracking-wider shrink-0 shadow-2xs">916 SEAL</span>
-                                    @endif -->
+                                    @endif
                                 </div>
                                 @if($order->return_due_date)
                                     <span class="text-rose-600 font-bold shrink-0">Rework: {{ \Carbon\Carbon::parse($order->return_due_date)->format('d M') }}</span>
@@ -447,7 +453,7 @@
                                     @else
                                     <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">N/A</div>
                                     @endif
-                                    @if($order->has_seal)
+                                    @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                                     <span class="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow leading-none uppercase">
                                         916
                                     </span>
@@ -523,6 +529,7 @@
                                 @elseif(in_array($order->status, ['in_process', 'returned', 'partially_completed']))
                                     <button type="button" onclick="if(confirm('Submit this piece for QC inspection?')) { submitSingleAction('{{ route('craftsman.work-orders.submit', $order) }}'); }" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">Send Approval</button>
                                 @endif
+                                <a href="{{ route('craftsman.work-orders.print', $order) }}" target="_blank" class="text-slate-500 hover:text-slate-800 text-xs font-medium">Print</a>
                                 <a href="{{ route('craftsman.work-orders.show', $order) }}" class="text-slate-500 hover:text-amber-600 text-xs font-bold transition-colors">Details &rarr;</a>
                             </td>
                         </tr>
@@ -557,7 +564,7 @@
                 <template x-if="!ordersList[currentIndex] || !ordersList[currentIndex].design_image">
                     <span class="text-slate-400 text-sm font-bold">No Image Available</span>
                 </template>
-                <template x-if="ordersList[currentIndex]?.has_seal">
+                <template x-if="ordersList[currentIndex]?.has_seal || ordersList[currentIndex]?.seal || (ordersList[currentIndex]?.reference_no && ordersList[currentIndex].reference_no.toUpperCase().includes('ESO'))">
                     <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-lg shadow uppercase">
                         916 SEAL
                     </span>
@@ -633,6 +640,7 @@
 
                 <div class="pt-2 flex gap-2">
                     <a :href="'/craftsman/work-orders/' + ordersList[currentIndex]?.id" class="flex-1 py-2.5 bg-slate-900 text-white rounded-xl text-center text-xs font-bold shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all">View Full Sheet &rarr;</a>
+                    <a :href="'/craftsman/work-orders/' + ordersList[currentIndex]?.id + '/print'" target="_blank" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-center text-xs font-bold transition-all">Print Slip</a>
                 </div>
             </div>
         </div>

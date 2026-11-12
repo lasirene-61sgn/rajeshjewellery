@@ -112,6 +112,13 @@ class WorkOrder extends Model
                 $order->work_order_no = sprintf('%s%04d', $prefix, $nextNumber);
             }
         });
+
+        static::saving(function (WorkOrder $order) {
+            // Auto-set 916 seal if reference number contains ESO
+            if (stripos((string) ($order->reference_no ?? ''), 'ESO') !== false && empty($order->seal)) {
+                $order->seal = '916';
+            }
+        });
     }
 
     public function craftsman(): BelongsTo
@@ -237,8 +244,23 @@ class WorkOrder extends Model
         return null;
     }
 
+    public function getSealAttribute(?string $value): ?string
+    {
+        if (!empty($value)) {
+            return $value;
+        }
+
+        if (stripos((string) ($this->reference_no ?? ''), 'ESO') !== false) {
+            return '916';
+        }
+
+        return null;
+    }
+
     public function getHasSealAttribute(): bool
     {
-        return !empty($this->seal) || (stripos((string) $this->reference_no, 'ESO') !== false);
+        return !empty($this->attributes['seal'] ?? null) 
+            || !empty($this->seal) 
+            || (stripos((string) ($this->reference_no ?? ''), 'ESO') !== false);
     }
 }

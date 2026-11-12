@@ -45,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/work-orders/bulk-accept', [WorkOrderController::class, 'bulkAccept'])->name('api.work-orders.bulk-accept');
     Route::post('/work-orders/bulk-submit', [WorkOrderController::class, 'bulkSubmit'])->name('api.work-orders.bulk-submit');
     Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('api.work-orders.bulk-reject');
+    Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('api.work-orders.bulk-print');
+    Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('api.work-orders.print');
     Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('api.work-orders.show');
     Route::post('/work-orders/{workOrder}/accept', [WorkOrderController::class, 'accept'])->name('api.work-orders.accept');
     Route::post('/work-orders/{workOrder}/reject', [WorkOrderController::class, 'reject'])->name('api.work-orders.reject');
@@ -86,6 +88,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-orders/bulk-accept', [WorkOrderController::class, 'bulkAccept'])->name('work-orders.bulk-accept');
         Route::post('/work-orders/bulk-submit', [WorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
         Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
+        Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+        Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('work-orders.print');
         Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
         Route::post('/work-orders/{workOrder}/accept', [WorkOrderController::class, 'accept'])->name('work-orders.accept');
         Route::post('/work-orders/{workOrder}/reject', [WorkOrderController::class, 'reject'])->name('work-orders.reject');
@@ -116,6 +120,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/work-orders/subcategories', [WorkOrderController::class, 'subcategories'])->name('work-orders.subcategories');
         Route::get('/work-orders/craftsmen', [WorkOrderController::class, 'craftsmenFilter'])->name('work-orders.craftsmen-filter');
         Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
+        Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+        Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('work-orders.print');
         Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
         Route::get('/customer-orders', [OrderController::class, 'index'])->name('customer-orders.index');
         Route::get('/customer-orders/filters', [OrderController::class, 'filters'])->name('customer-orders.filters');
@@ -139,6 +145,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-orders/bulk-accept', [WorkOrderController::class, 'bulkAccept'])->name('work-orders.bulk-accept');
         Route::post('/work-orders/bulk-submit', [WorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
         Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
+        Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+        Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('work-orders.print');
         Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
         Route::post('/work-orders/{workOrder}/accept', [WorkOrderController::class, 'accept'])->name('work-orders.accept');
         Route::post('/work-orders/{workOrder}/reject', [WorkOrderController::class, 'reject'])->name('work-orders.reject');

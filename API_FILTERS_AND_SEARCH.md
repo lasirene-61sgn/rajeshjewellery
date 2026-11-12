@@ -20,6 +20,8 @@ All endpoints automatically detect whether an **Admin** or a **Craftsman** is ma
 | **Categories Only** | `GET /api/work-orders/categories` | `GET /api/work-orders/filters?type=category` | Admin, Craftsman |
 | **Subcategories Only** | `GET /api/work-orders/subcategories` | `GET /api/work-orders/filters?type=subcategory` | Admin, Craftsman |
 | **Work Orders Tabs & Live Counts** | `GET /api/work-orders/tabs` | `GET /api/common/work-orders/tabs`<br>`GET /api/admin/work-orders/tabs`<br>`GET /api/craftsman/work-orders/tabs` | Admin, Craftsman |
+| **Work Order Print Slip** | `GET /api/work-orders/{id}/print` | `GET /api/common/work-orders/{id}/print`<br>`GET /api/admin/work-orders/{id}/print`<br>`GET /api/craftsman/work-orders/{id}/print` | Admin, Craftsman |
+| **Bulk Work Orders Print Slips** | `POST /api/work-orders/bulk-print` | `POST /api/common/work-orders/bulk-print`<br>`POST /api/admin/work-orders/bulk-print`<br>`POST /api/craftsman/work-orders/bulk-print` | Admin, Craftsman |
 | **Customer Orders Listing** | `GET /api/customer-orders` | `GET /api/orders`<br>`GET /api/common/customer-orders`<br>`GET /api/common/orders` | Admin, Craftsman |
 | **Customer Orders Filters** | `GET /api/customer-orders/filters` | `GET /api/orders/filters`<br>`GET /api/customer-orders?filter={type}` | Admin, Craftsman |
 | **Customer Order Types Only** | `GET /api/customer-orders/order-types` | `GET /api/orders/order-types` | Admin, Craftsman |
@@ -412,4 +414,33 @@ const productRes = await fetch('https://arihanthjewellers.in/api/common/work-ord
 const productJson = await productRes.json();
 console.log(productJson.data); // ["Gold Ring 22K", "Peacock Bangle", ...]
 ```
+
+---
+
+## 7. Work Order Print Slips & Partially Completed Specifications
+
+### 7.1 Single & Bulk Print Endpoints
+- `GET /api/work-orders/{id}/print`: Returns rendered HTML print slip or JSON payload if `?format=json` or `Accept: application/json` is passed.
+- `POST /api/work-orders/bulk-print`: Accepts `{ "order_ids": [1, 2, 3] }` and prints multiple work order slips formatted for A4 printing.
+
+### 7.2 ESO & 916 Hallmark Seal Requirement
+- Whenever an order has `ESO` in its reference number (e.g., `1307ESO2784249-001`):
+  - `has_seal`: `true`
+  - `seal`: `"916"`
+  - Print Slips display the **`NEED 916 SEAL ONLY`** bold red banner and state `Seal: 916 SEAL (NEED 916 SEAL ONLY)` in the specifications table.
+  - Image modals in Admin and Craftsman web panels display the **`916 SEAL`** badge over the jewelry image.
+
+### 7.3 Partially Completed Orders
+- When a work order has status `partially_completed` or `completed_quantity > 0`:
+  - `is_partially_completed`: `true`
+  - `quantity`: Total ordered quantity (e.g., `10`)
+  - `completed_quantity`: Done quantity (e.g., `3`)
+  - `balance_quantity`: Remaining quantity to manufacture (e.g., `7`)
+- **Print Slips (Admin & Craftsman)**:
+  - Displays top banner: `PARTIALLY COMPLETED — COMPLETED: X / Y | BALANCE TO DO: Z PCS`.
+  - Details table replaces static `Qty` with separate breakdown rows:
+    - `Total Qty: Y PCS`
+    - `Completed: X PCS`
+    - `Balance: Z PCS` (prominently styled for the craftsman).
+
 

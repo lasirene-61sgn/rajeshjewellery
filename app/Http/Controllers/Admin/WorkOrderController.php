@@ -321,6 +321,10 @@ class WorkOrderController extends Controller
             'order_type' => ['nullable', 'string'],
         ]);
 
+        if (stripos($validated['reference_no'] ?? '', 'ESO') !== false && empty($validated['seal'])) {
+            $validated['seal'] = '916';
+        }
+
         // Enhanced Image Processing
         if ($request->hasFile('design_image')) {
             $validated['design_image'] = $this->processAndSaveDesignImage(
@@ -452,6 +456,10 @@ class WorkOrderController extends Controller
             'design_image' => ['nullable', 'image', 'max:4096'],
             'order_type' => ['nullable', 'string'],
         ]);
+
+        if (stripos($validated['reference_no'] ?? '', 'ESO') !== false && empty($validated['seal'])) {
+            $validated['seal'] = '916';
+        }
 
         // Enhanced Image Processing
         if ($request->hasFile('design_image')) {

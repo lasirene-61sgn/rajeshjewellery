@@ -92,6 +92,7 @@ Route::prefix('craftsman')->name('craftsman.')->middleware(['web', 'auth:craftsm
 
     Route::get('work-orders', [CraftsmanWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('work-orders/{workOrder}', [CraftsmanWorkOrderController::class, 'show'])->name('work-orders.show');
+    Route::get('work-orders/{workOrder}/print', [CraftsmanWorkOrderController::class, 'print'])->name('work-orders.print');
     Route::post('work-orders/{workOrder}/accept', [CraftsmanWorkOrderController::class, 'accept'])->name('work-orders.accept');
     Route::post('work-orders/{workOrder}/reject', [CraftsmanWorkOrderController::class, 'reject'])->name('work-orders.reject');
     Route::post('work-orders/{workOrder}/submit', [CraftsmanWorkOrderController::class, 'submitForApproval'])->name('work-orders.submit');
