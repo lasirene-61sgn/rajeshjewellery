@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\Craftsman;
 use App\Models\Order;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -166,7 +167,7 @@ class OrderController extends Controller
                     'product_names' => $products,
                     'order_types'   => $types,
                     'craftsmen'     => $craftsmen, // Admin only!
-                    'statuses'      => ['pending', 'allocated', 'in_process', 'returned', 'completed'],
+                    'statuses'      => ['pending', 'allocated', 'in_process', 'for_approval', 'returned', 'completed'],
                 ],
             ]);
         }
@@ -181,7 +182,7 @@ class OrderController extends Controller
             'data'    => [
                 'product_names' => $products,
                 'order_types'   => $types,
-                'statuses'      => ['allocated', 'in_process', 'completed'],
+                'statuses'      => ['allocated', 'in_process', 'for_approval', 'completed'],
             ],
         ]);
     }
@@ -290,27 +291,505 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => ['required', 'in:in_progress,completed'],
+            'status' => ['required', 'in:in_progress,in_process,for_approval,completed'],
         ]);
+
+        $statusToSet = $validated['status'];
+        if (in_array($statusToSet, ['completed', 'for_approval'])) {
+            $statusToSet = 'for_approval';
+        } elseif (in_array($statusToSet, ['in_progress', 'in_process'])) {
+            $statusToSet = 'in_process';
+        }
 
         $order->update([
-            'status' => $validated['status'],
+            'status' => $statusToSet,
         ]);
 
-        $statusLabel = ucwords(str_replace('_', ' ', $validated['status']));
+        if ($statusToSet === 'for_approval') {
+            $order->logActivity(
+                action: 'for_approval',
+                note: "Order submitted for approval by Craftsman {$user->name}.",
+                details: [
+                    'status'         => 'for_approval',
+                    'craftsman_name' => $user->name,
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Order submitted for approval successfully.",
+                'data'    => $this->transformOrder($order->fresh(), $user),
+            ]);
+        }
+
         $order->logActivity(
-            action: $validated['status'],
-            note: "Order status updated to {$statusLabel} by Craftsman {$user->name}.",
+            action: 'in_process',
+            note: "Order marked as In Process by Craftsman {$user->name}.",
             details: [
-                'status'         => $validated['status'],
+                'status'         => 'in_process',
                 'craftsman_name' => $user->name,
             ]
         );
 
         return response()->json([
             'success' => true,
-            'message' => "Order status updated to {$statusLabel} successfully.",
+            'message' => "Order marked as In Process successfully.",
             'data'    => $this->transformOrder($order->fresh(), $user),
+        ]);
+    }
+
+    /**
+     * Craftsman Action: Accept allocated customer order.
+     */
+    public function accept(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Craftsman) {
+            return response()->json(['success' => false, 'message' => 'Action available to Craftsman only.'], 403);
+        }
+
+        if ((int) $order->craftsman_id !== (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+        }
+
+        if ($order->status !== 'allocated') {
+            return response()->json([
+                'success' => false,
+                'message' => "Order cannot be accepted in status '{$order->status}'.",
+            ], 422);
+        }
+
+        $order->update([
+            'status' => 'in_process',
+        ]);
+
+        $order->logActivity(
+            action: 'in_process',
+            note: "Order accepted by Craftsman {$user->name}. Fabrication started (In Process).",
+            details: [
+                'craftsman_id'   => $user->id,
+                'craftsman_name' => $user->name,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Order #{$order->reference_number} accepted successfully.",
+            'data'    => $this->transformOrder($order->fresh(), $user),
+        ]);
+    }
+
+    /**
+     * Craftsman / Admin Action: Reject customer order.
+     */
+    public function reject(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Craftsman && ! $user instanceof Admin) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+        }
+
+        if ($user instanceof Craftsman && (int) $order->craftsman_id !== (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+        }
+
+        $validated = $request->validate([
+            'reject_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $reason = $validated['reject_reason'] ?? ($user instanceof Craftsman ? 'Rejected by Craftsman' : 'Rejected by Admin');
+
+        $order->update([
+            'status' => 'returned',
+        ]);
+
+        $order->logActivity(
+            action: 'returned',
+            note: "Order rejected by " . ($user instanceof Craftsman ? "Craftsman {$user->name}" : "Admin {$user->name}") . ". Reason: {$reason}",
+            details: [
+                'reject_reason'  => $reason,
+                'actor_id'       => $user->id,
+                'actor_name'     => $user->name,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Order #{$order->reference_number} has been rejected.",
+            'data'    => $this->transformOrder($order->fresh(), $user),
+        ]);
+    }
+
+    /**
+     * Craftsman Action: Complete / Submit order for admin approval.
+     */
+    public function submitForApproval(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Craftsman) {
+            return response()->json(['success' => false, 'message' => 'Action available to Craftsman only.'], 403);
+        }
+
+        if ((int) $order->craftsman_id !== (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+        }
+
+        if (! in_array($order->status, ['allocated', 'in_process', 'in_progress', 'returned'])) {
+            return response()->json([
+                'success' => false,
+                'message' => "Cannot submit order in status '{$order->status}'.",
+            ], 422);
+        }
+
+        $order->update([
+            'status' => 'for_approval',
+        ]);
+
+        $order->logActivity(
+            action: 'for_approval',
+            note: "Submitted by Craftsman {$user->name} for Admin approval.",
+            details: [
+                'craftsman_name' => $user->name,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Order #{$order->reference_number} submitted for Admin approval.",
+            'data'    => $this->transformOrder($order->fresh(), $user),
+        ]);
+    }
+
+    /**
+     * Admin Action: Allocate order to craftsman.
+     */
+    public function allocate(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Admin) {
+            return response()->json(['success' => false, 'message' => 'Action available to Admin only.'], 403);
+        }
+
+        $validated = $request->validate([
+            'craftsman_id' => ['required', 'exists:craftsmen,id'],
+            'due_date'     => ['nullable', 'date'],
+        ]);
+
+        $craftsman = Craftsman::find($validated['craftsman_id']);
+
+        $updateData = [
+            'craftsman_id' => $craftsman->id,
+            'status'       => 'allocated',
+        ];
+
+        if (! empty($validated['due_date'])) {
+            $updateData['due_date'] = $validated['due_date'];
+        }
+
+        $order->update($updateData);
+
+        $order->logActivity(
+            action: 'allocated',
+            note: "Order allocated to Craftsman {$craftsman->name} by Admin {$user->name}.",
+            details: [
+                'craftsman_id'   => $craftsman->id,
+                'craftsman_name' => $craftsman->name,
+                'admin_name'     => $user->name,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Order #{$order->reference_number} allocated to {$craftsman->name} successfully.",
+            'data'    => $this->transformOrder($order->fresh(), $user),
+        ]);
+    }
+
+    /**
+     * Admin Action: Approve order and mark completed.
+     */
+    public function approve(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Admin) {
+            return response()->json(['success' => false, 'message' => 'Action available to Admin only.'], 403);
+        }
+
+        $order->update([
+            'status' => 'completed',
+        ]);
+
+        $craftsmanName = optional($order->craftsman)->name ?? 'Craftsman';
+
+        $order->logActivity(
+            action: 'completed',
+            note: "Order approved and marked completed by Admin {$user->name}.",
+            details: [
+                'status'         => 'completed',
+                'craftsman_name' => $craftsmanName,
+                'admin_name'     => $user->name,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Order #{$order->reference_number} approved and marked completed successfully.",
+            'data'    => $this->transformOrder($order->fresh(), $user),
+        ]);
+    }
+
+    /**
+     * Craftsman Action: Bulk Accept allocated customer orders.
+     */
+    public function bulkAccept(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Craftsman) {
+            return response()->json(['success' => false, 'message' => 'Action available to Craftsman only.'], 403);
+        }
+
+        $validated = $request->validate([
+            'order_ids'   => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ]);
+
+        $orders = Order::whereIn('id', $validated['order_ids'])
+            ->where('craftsman_id', $user->id)
+            ->where('status', 'allocated')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No allocated customer orders found matching the provided IDs.',
+            ], 422);
+        }
+
+        foreach ($orders as $order) {
+            $order->update([
+                'status' => 'in_process',
+            ]);
+
+            $order->logActivity(
+                action: 'in_process',
+                note: "Order accepted via bulk action by Craftsman {$user->name}.",
+                details: ['craftsman_name' => $user->name]
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$orders->count()} orders accepted successfully.",
+        ]);
+    }
+
+    /**
+     * Craftsman / Admin Action: Bulk Reject customer orders.
+     */
+    public function bulkReject(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Craftsman && ! $user instanceof Admin) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+        }
+
+        $validated = $request->validate([
+            'order_ids'     => ['required', 'array', 'min:1'],
+            'order_ids.*'   => ['integer', 'exists:orders,id'],
+            'reject_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $reason = $validated['reject_reason'] ?? ($user instanceof Craftsman ? 'Rejected by Craftsman via bulk action' : 'Rejected by Admin via bulk action');
+
+        $query = Order::whereIn('id', $validated['order_ids']);
+        if ($user instanceof Craftsman) {
+            $query->where('craftsman_id', $user->id)->where('status', 'allocated');
+        }
+
+        $orders = $query->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No eligible orders found matching the provided IDs.',
+            ], 422);
+        }
+
+        foreach ($orders as $order) {
+            $order->update([
+                'status' => 'returned',
+            ]);
+
+            $order->logActivity(
+                action: 'returned',
+                note: "Order rejected via bulk action by " . ($user instanceof Craftsman ? "Craftsman {$user->name}" : "Admin {$user->name}") . ". Reason: {$reason}",
+                details: [
+                    'reject_reason' => $reason,
+                    'actor_name'    => $user->name,
+                ]
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$orders->count()} orders rejected successfully.",
+        ]);
+    }
+
+    /**
+     * Craftsman Action: Bulk Complete / Submit orders for approval.
+     */
+    public function bulkComplete(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Craftsman) {
+            return response()->json(['success' => false, 'message' => 'Action available to Craftsman only.'], 403);
+        }
+
+        $validated = $request->validate([
+            'order_ids'   => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ]);
+
+        $orders = Order::whereIn('id', $validated['order_ids'])
+            ->where('craftsman_id', $user->id)
+            ->whereIn('status', ['allocated', 'in_process', 'in_progress', 'returned'])
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No eligible customer orders found for completion/approval submission.',
+            ], 422);
+        }
+
+        foreach ($orders as $order) {
+            $order->update([
+                'status' => 'for_approval',
+            ]);
+
+            $order->logActivity(
+                action: 'for_approval',
+                note: "Submitted in bulk by Craftsman {$user->name} for Admin approval.",
+                details: ['craftsman_name' => $user->name]
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$orders->count()} orders submitted for approval successfully.",
+        ]);
+    }
+
+    /**
+     * Alias for bulkComplete.
+     */
+    public function bulkSubmit(Request $request): JsonResponse
+    {
+        return $this->bulkComplete($request);
+    }
+
+    /**
+     * Admin Action: Bulk Allocate customer orders to a craftsman.
+     */
+    public function bulkAllocate(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Admin) {
+            return response()->json(['success' => false, 'message' => 'Action available to Admin only.'], 403);
+        }
+
+        $validated = $request->validate([
+            'order_ids'    => ['required', 'array', 'min:1'],
+            'order_ids.*'  => ['integer', 'exists:orders,id'],
+            'craftsman_id' => ['required', 'exists:craftsmen,id'],
+            'due_date'     => ['nullable', 'date'],
+        ]);
+
+        $craftsman = Craftsman::find($validated['craftsman_id']);
+        $orders = Order::whereIn('id', $validated['order_ids'])->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No orders found matching the provided IDs.',
+            ], 422);
+        }
+
+        foreach ($orders as $order) {
+            $updateData = [
+                'craftsman_id' => $craftsman->id,
+                'status'       => 'allocated',
+            ];
+
+            if (! empty($validated['due_date'])) {
+                $updateData['due_date'] = $validated['due_date'];
+            }
+
+            $order->update($updateData);
+
+            $order->logActivity(
+                action: 'allocated',
+                note: "Order allocated to Craftsman {$craftsman->name} via bulk action by Admin {$user->name}.",
+                details: [
+                    'craftsman_id'   => $craftsman->id,
+                    'craftsman_name' => $craftsman->name,
+                    'admin_name'     => $user->name,
+                ]
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$orders->count()} orders allocated to {$craftsman->name} successfully.",
+        ]);
+    }
+
+    /**
+     * Admin Action: Bulk Approve customer orders and mark as completed.
+     */
+    public function bulkApprove(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user instanceof Admin) {
+            return response()->json(['success' => false, 'message' => 'Action available to Admin only.'], 403);
+        }
+
+        $validated = $request->validate([
+            'order_ids'   => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ]);
+
+        $orders = Order::whereIn('id', $validated['order_ids'])->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No orders found matching the provided IDs.',
+            ], 422);
+        }
+
+        foreach ($orders as $order) {
+            $order->update([
+                'status' => 'completed',
+            ]);
+
+            $craftsmanName = optional($order->craftsman)->name ?? 'Craftsman';
+
+            $order->logActivity(
+                action: 'completed',
+                note: "Order approved and marked completed via bulk action by Admin {$user->name}.",
+                details: [
+                    'status'         => 'completed',
+                    'craftsman_name' => $craftsmanName,
+                    'admin_name'     => $user->name,
+                ]
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$orders->count()} orders approved and marked as completed successfully.",
         ]);
     }
 
@@ -468,12 +947,13 @@ class OrderController extends Controller
         }
 
         $counts = [
-            'all'         => (clone $baseQuery)->count(),
-            'pending'     => (clone $baseQuery)->where('status', 'pending')->count(),
-            'allocated'   => (clone $baseQuery)->where('status', 'allocated')->count(),
-            'in_progress' => (clone $baseQuery)->whereIn('status', ['in_process', 'in_progress'])->count(),
-            'returned'    => (clone $baseQuery)->where('status', 'returned')->count(),
-            'completed'   => (clone $baseQuery)->where('status', 'completed')->count(),
+            'all'          => (clone $baseQuery)->count(),
+            'pending'      => (clone $baseQuery)->where('status', 'pending')->count(),
+            'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
+            'in_progress'  => (clone $baseQuery)->whereIn('status', ['in_process', 'in_progress'])->count(),
+            'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
+            'returned'     => (clone $baseQuery)->where('status', 'returned')->count(),
+            'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
         ];
 
         $tabs = [
@@ -497,9 +977,15 @@ class OrderController extends Controller
             ],
             [
                 'key'       => 'in_progress',
-                'label'     => 'In Progress',
+                'label'     => 'In Process',
                 'count'     => $counts['in_progress'],
                 'is_active' => in_array($status, ['in_progress', 'in_process']),
+            ],
+            [
+                'key'       => 'for_approval',
+                'label'     => 'For Approval',
+                'count'     => $counts['for_approval'],
+                'is_active' => $status === 'for_approval',
             ],
             [
                 'key'       => 'returned',
@@ -602,10 +1088,11 @@ class OrderController extends Controller
         }
 
         $counts = [
-            'all'         => (clone $baseQuery)->count(),
-            'allocated'   => (clone $baseQuery)->where('status', 'allocated')->count(),
-            'in_progress' => (clone $baseQuery)->whereIn('status', ['in_process', 'in_progress'])->count(),
-            'completed'   => (clone $baseQuery)->where('status', 'completed')->count(),
+            'all'          => (clone $baseQuery)->count(),
+            'allocated'    => (clone $baseQuery)->where('status', 'allocated')->count(),
+            'in_progress'  => (clone $baseQuery)->whereIn('status', ['in_process', 'in_progress'])->count(),
+            'for_approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
+            'completed'    => (clone $baseQuery)->where('status', 'completed')->count(),
         ];
 
         $tabs = [
@@ -623,9 +1110,15 @@ class OrderController extends Controller
             ],
             [
                 'key'       => 'in_progress',
-                'label'     => 'In Progress',
+                'label'     => 'In Process',
                 'count'     => $counts['in_progress'],
                 'is_active' => in_array($currentTab, ['in_progress', 'in_process']),
+            ],
+            [
+                'key'       => 'for_approval',
+                'label'     => 'For Approval',
+                'count'     => $counts['for_approval'],
+                'is_active' => $currentTab === 'for_approval',
             ],
             [
                 'key'       => 'completed',
@@ -719,7 +1212,11 @@ class OrderController extends Controller
             ] : null,
             'actions'            => [
                 'can_mark_in_progress' => $user instanceof Craftsman && in_array($order->status, ['allocated', 'pending']),
-                'can_mark_completed'   => $user instanceof Craftsman && in_array($order->status, ['in_progress', 'in_process']),
+                'can_mark_completed'   => $user instanceof Craftsman && in_array($order->status, ['allocated', 'in_progress', 'in_process']),
+                'can_accept'           => $user instanceof Craftsman && $order->status === 'allocated',
+                'can_reject'           => $user instanceof Craftsman && $order->status === 'allocated',
+                'can_allocate'         => $user instanceof Admin && in_array($order->status, ['pending', 'returned', 'allocated']),
+                'can_approve'          => $user instanceof Admin && $order->status === 'for_approval',
             ],
             'timestamps'         => [
                 'created_at' => $order->created_at?->timezone('Asia/Kolkata')->format('d M Y, h:i A'),

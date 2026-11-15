@@ -105,10 +105,11 @@
                             <span class="font-bold w-32 shrink-0">Order Date</span>
                             <span class="font-bold">: {{ $order->created_at->format('d/m/Y') }}</span>
                         </div>
-                         <div class="flex items-start">
-                            <span class="font-bold w-28 shrink-0">Due Date</span>
-                            <span class="font-bold">: {{ isset($order->due_date) ? \Carbon\Carbon::parse($order->due_date)->format('d/m/Y') : '' }}</span>
+                        <div class="flex items-start text-purple-900 font-extrabold text-lg">
+                            <span class="font-bold w-28 shrink-0">Balance</span>
+                            <span class="font-bold">: {{ $order->balance_quantity }} {{ $order->unit_type ?? 'PCS' }}</span>
                         </div>
+                         
                         <!-- @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                         <div class="flex items-start">
                             <span class="font-bold w-32 shrink-0">Seal</span>
@@ -136,16 +137,17 @@
                             <span class="font-bold w-28 shrink-0">Completed</span>
                             <span class="font-bold">: {{ $order->completed_quantity ?? 0 }} {{ $order->unit_type ?? 'PCS' }}</span>
                         </div>
-                        <div class="flex items-start text-purple-900 font-extrabold text-lg">
-                            <span class="font-bold w-28 shrink-0">Balance</span>
-                            <span class="font-bold">: {{ $order->balance_quantity }} {{ $order->unit_type ?? 'PCS' }}</span>
-                        </div>
+                        
                         @else
                         <div class="flex items-start">
                             <span class="font-bold w-28 shrink-0">Qty</span>
                             <span class="font-bold">: {{ $order->quantity }} {{ $order->unit_type ?? 'PCS' }}</span>
                         </div>
                         @endif
+                        <div class="flex items-start">
+                            <span class="font-bold w-28 shrink-0">Due Date</span>
+                            <span class="font-bold">: {{ isset($order->due_date) ? \Carbon\Carbon::parse($order->due_date)->format('d/m/Y') : '' }}</span>
+                        </div>
                        
                     </div>
 

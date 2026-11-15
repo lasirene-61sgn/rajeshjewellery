@@ -11,6 +11,23 @@
             <p class="text-sm text-slate-500 mt-0.5">Comprehensive view of order specifications and assignment status.</p>
         </div>
         <div class="flex items-center space-x-3">
+            @if($order->status === 'for_approval')
+                <form action="{{ route('admin.orders.approve', $order->id) }}" method="POST" onsubmit="return confirm('Approve this order and mark as completed?');" class="inline">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Approve Order
+                    </button>
+                </form>
+            @elseif($order->status !== 'completed')
+                <form action="{{ route('admin.orders.force-complete', $order->id) }}" method="POST" onsubmit="return confirm('Force complete this order?');" class="inline">
+                    @csrf
+                    @method('PATCH')
+                    <button type="submit" class="inline-flex items-center px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition-colors">
+                        Force Complete
+                    </button>
+                </form>
+            @endif
             <a href="{{ route('admin.orders.edit', $order->id) }}" class="inline-flex items-center px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium rounded-lg border border-amber-200 transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 Edit Order
@@ -46,14 +63,17 @@
                         <span class="text-xs font-mono uppercase tracking-wider text-slate-400">Order Status</span>
                         @php
                             $badgeStyles = [
-                                'pending' => 'bg-slate-100 text-slate-700 border-slate-200',
-                                'allocated' => 'bg-sky-50 text-sky-700 border-sky-200',
-                                'in_progress' => 'bg-indigo-50 text-indigo-700 border-indigo-200',
-                                'completed' => 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                'pending'      => 'bg-slate-100 text-slate-700 border-slate-200',
+                                'allocated'    => 'bg-sky-50 text-sky-700 border-sky-200',
+                                'in_process'   => 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                                'in_progress'  => 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                                'for_approval' => 'bg-indigo-50 text-indigo-800 border-indigo-200 font-bold',
+                                'returned'     => 'bg-rose-50 text-rose-800 border-rose-200',
+                                'completed'    => 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             ];
                         @endphp
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border {{ $badgeStyles[$order->status] ?? 'bg-slate-100 text-slate-800' }}">
-                            {{ ucwords(str_replace('_', ' ', $order->status)) }}
+                            {{ $order->status === 'for_approval' ? 'For Approval' : (in_array($order->status, ['in_process', 'in_progress']) ? 'In Process' : ucwords(str_replace('_', ' ', $order->status))) }}
                         </span>
                     </div>
 

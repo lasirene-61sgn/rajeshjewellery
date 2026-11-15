@@ -52,16 +52,41 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/work-orders/{workOrder}/reject', [WorkOrderController::class, 'reject'])->name('api.work-orders.reject');
     Route::post('/work-orders/{workOrder}/submit', [WorkOrderController::class, 'submitForApproval'])->name('api.work-orders.submit');
 
-    // 3. Unified Customer Orders (Admin: all orders view-only; Craftsman: assigned orders + status update)
+    // 3. Unified Customer Orders (Admin: all orders + allocate + approve; Craftsman: assigned orders + accept + reject + submit/complete)
     Route::get('/customer-orders', [OrderController::class, 'index'])->name('api.customer-orders.index');
     Route::get('/customer-orders/filters', [OrderController::class, 'filters'])->name('api.customer-orders.filters');
     Route::get('/customer-orders/order-types', [OrderController::class, 'orderTypes'])->name('api.customer-orders.order-types');
+    Route::post('/customer-orders/bulk-accept', [OrderController::class, 'bulkAccept'])->name('api.customer-orders.bulk-accept');
+    Route::post('/customer-orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('api.customer-orders.bulk-reject');
+    Route::post('/customer-orders/bulk-complete', [OrderController::class, 'bulkComplete'])->name('api.customer-orders.bulk-complete');
+    Route::post('/customer-orders/bulk-submit', [OrderController::class, 'bulkComplete'])->name('api.customer-orders.bulk-submit');
+    Route::post('/customer-orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('api.customer-orders.bulk-allocate');
+    Route::post('/customer-orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('api.customer-orders.bulk-approve');
     Route::get('/customer-orders/{order}', [OrderController::class, 'show'])->name('api.customer-orders.show');
+    Route::post('/customer-orders/{order}/accept', [OrderController::class, 'accept'])->name('api.customer-orders.accept');
+    Route::post('/customer-orders/{order}/reject', [OrderController::class, 'reject'])->name('api.customer-orders.reject');
+    Route::post('/customer-orders/{order}/submit', [OrderController::class, 'submitForApproval'])->name('api.customer-orders.submit');
+    Route::post('/customer-orders/{order}/complete', [OrderController::class, 'submitForApproval'])->name('api.customer-orders.complete');
+    Route::post('/customer-orders/{order}/allocate', [OrderController::class, 'allocate'])->name('api.customer-orders.allocate');
+    Route::post('/customer-orders/{order}/approve', [OrderController::class, 'approve'])->name('api.customer-orders.approve');
     Route::post('/customer-orders/{order}/status', [OrderController::class, 'updateStatus'])->name('api.customer-orders.update-status');
+
     Route::get('/orders', [OrderController::class, 'index'])->name('api.orders.index');
     Route::get('/orders/filters', [OrderController::class, 'filters'])->name('api.orders.filters');
     Route::get('/orders/order-types', [OrderController::class, 'orderTypes'])->name('api.orders.order-types');
+    Route::post('/orders/bulk-accept', [OrderController::class, 'bulkAccept'])->name('api.orders.bulk-accept');
+    Route::post('/orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('api.orders.bulk-reject');
+    Route::post('/orders/bulk-complete', [OrderController::class, 'bulkComplete'])->name('api.orders.bulk-complete');
+    Route::post('/orders/bulk-submit', [OrderController::class, 'bulkComplete'])->name('api.orders.bulk-submit');
+    Route::post('/orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('api.orders.bulk-allocate');
+    Route::post('/orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('api.orders.bulk-approve');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('api.orders.show');
+    Route::post('/orders/{order}/accept', [OrderController::class, 'accept'])->name('api.orders.accept');
+    Route::post('/orders/{order}/reject', [OrderController::class, 'reject'])->name('api.orders.reject');
+    Route::post('/orders/{order}/submit', [OrderController::class, 'submitForApproval'])->name('api.orders.submit');
+    Route::post('/orders/{order}/complete', [OrderController::class, 'submitForApproval'])->name('api.orders.complete');
+    Route::post('/orders/{order}/allocate', [OrderController::class, 'allocate'])->name('api.orders.allocate');
+    Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('api.orders.approve');
     Route::post('/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('api.orders.update-status');
 
     // 4. Craftsmen Directory Module (Admin Only)
@@ -97,12 +122,37 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/customer-orders', [OrderController::class, 'index'])->name('customer-orders.index');
         Route::get('/customer-orders/filters', [OrderController::class, 'filters'])->name('customer-orders.filters');
         Route::get('/customer-orders/order-types', [OrderController::class, 'orderTypes'])->name('customer-orders.order-types');
+        Route::post('/customer-orders/bulk-accept', [OrderController::class, 'bulkAccept'])->name('customer-orders.bulk-accept');
+        Route::post('/customer-orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('customer-orders.bulk-reject');
+        Route::post('/customer-orders/bulk-complete', [OrderController::class, 'bulkComplete'])->name('customer-orders.bulk-complete');
+        Route::post('/customer-orders/bulk-submit', [OrderController::class, 'bulkComplete'])->name('customer-orders.bulk-submit');
+        Route::post('/customer-orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('customer-orders.bulk-allocate');
+        Route::post('/customer-orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('customer-orders.bulk-approve');
         Route::get('/customer-orders/{order}', [OrderController::class, 'show'])->name('customer-orders.show');
+        Route::post('/customer-orders/{order}/accept', [OrderController::class, 'accept'])->name('customer-orders.accept');
+        Route::post('/customer-orders/{order}/reject', [OrderController::class, 'reject'])->name('customer-orders.reject');
+        Route::post('/customer-orders/{order}/submit', [OrderController::class, 'submitForApproval'])->name('customer-orders.submit');
+        Route::post('/customer-orders/{order}/complete', [OrderController::class, 'submitForApproval'])->name('customer-orders.complete');
+        Route::post('/customer-orders/{order}/allocate', [OrderController::class, 'allocate'])->name('customer-orders.allocate');
+        Route::post('/customer-orders/{order}/approve', [OrderController::class, 'approve'])->name('customer-orders.approve');
         Route::post('/customer-orders/{order}/status', [OrderController::class, 'updateStatus'])->name('customer-orders.update-status');
+
         Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/filters', [OrderController::class, 'filters'])->name('orders.filters');
         Route::get('/orders/order-types', [OrderController::class, 'orderTypes'])->name('orders.order-types');
+        Route::post('/orders/bulk-accept', [OrderController::class, 'bulkAccept'])->name('orders.bulk-accept');
+        Route::post('/orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('orders.bulk-reject');
+        Route::post('/orders/bulk-complete', [OrderController::class, 'bulkComplete'])->name('orders.bulk-complete');
+        Route::post('/orders/bulk-submit', [OrderController::class, 'bulkComplete'])->name('orders.bulk-submit');
+        Route::post('/orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('orders.bulk-allocate');
+        Route::post('/orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('orders.bulk-approve');
         Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+        Route::post('/orders/{order}/accept', [OrderController::class, 'accept'])->name('orders.accept');
+        Route::post('/orders/{order}/reject', [OrderController::class, 'reject'])->name('orders.reject');
+        Route::post('/orders/{order}/submit', [OrderController::class, 'submitForApproval'])->name('orders.submit');
+        Route::post('/orders/{order}/complete', [OrderController::class, 'submitForApproval'])->name('orders.complete');
+        Route::post('/orders/{order}/allocate', [OrderController::class, 'allocate'])->name('orders.allocate');
+        Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
         Route::post('/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update-status');
         Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('craftsmen.index');
         Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('craftsmen.show');
@@ -126,7 +176,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/customer-orders', [OrderController::class, 'index'])->name('customer-orders.index');
         Route::get('/customer-orders/filters', [OrderController::class, 'filters'])->name('customer-orders.filters');
         Route::get('/customer-orders/order-types', [OrderController::class, 'orderTypes'])->name('customer-orders.order-types');
+        Route::post('/customer-orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('customer-orders.bulk-allocate');
+        Route::post('/customer-orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('customer-orders.bulk-approve');
+        Route::post('/customer-orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('customer-orders.bulk-reject');
         Route::get('/customer-orders/{order}', [OrderController::class, 'show'])->name('customer-orders.show');
+        Route::post('/customer-orders/{order}/allocate', [OrderController::class, 'allocate'])->name('customer-orders.allocate');
+        Route::post('/customer-orders/{order}/approve', [OrderController::class, 'approve'])->name('customer-orders.approve');
+
+        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/filters', [OrderController::class, 'filters'])->name('orders.filters');
+        Route::get('/orders/order-types', [OrderController::class, 'orderTypes'])->name('orders.order-types');
+        Route::post('/orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('orders.bulk-allocate');
+        Route::post('/orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('orders.bulk-approve');
+        Route::post('/orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('orders.bulk-reject');
+        Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+        Route::post('/orders/{order}/allocate', [OrderController::class, 'allocate'])->name('orders.allocate');
+        Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
         Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('craftsmen.index');
         Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('craftsmen.show');
     });
@@ -154,7 +219,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/customer-orders', [OrderController::class, 'index'])->name('customer-orders.index');
         Route::get('/customer-orders/filters', [OrderController::class, 'filters'])->name('customer-orders.filters');
         Route::get('/customer-orders/order-types', [OrderController::class, 'orderTypes'])->name('customer-orders.order-types');
+        Route::post('/customer-orders/bulk-accept', [OrderController::class, 'bulkAccept'])->name('customer-orders.bulk-accept');
+        Route::post('/customer-orders/bulk-submit', [OrderController::class, 'bulkComplete'])->name('customer-orders.bulk-submit');
+        Route::post('/customer-orders/bulk-complete', [OrderController::class, 'bulkComplete'])->name('customer-orders.bulk-complete');
+        Route::post('/customer-orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('customer-orders.bulk-reject');
         Route::get('/customer-orders/{order}', [OrderController::class, 'show'])->name('customer-orders.show');
+        Route::post('/customer-orders/{order}/accept', [OrderController::class, 'accept'])->name('customer-orders.accept');
+        Route::post('/customer-orders/{order}/reject', [OrderController::class, 'reject'])->name('customer-orders.reject');
+        Route::post('/customer-orders/{order}/submit', [OrderController::class, 'submitForApproval'])->name('customer-orders.submit');
+        Route::post('/customer-orders/{order}/complete', [OrderController::class, 'submitForApproval'])->name('customer-orders.complete');
         Route::post('/customer-orders/{order}/status', [OrderController::class, 'updateStatus'])->name('customer-orders.update-status');
+
+        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/filters', [OrderController::class, 'filters'])->name('orders.filters');
+        Route::get('/orders/order-types', [OrderController::class, 'orderTypes'])->name('orders.order-types');
+        Route::post('/orders/bulk-accept', [OrderController::class, 'bulkAccept'])->name('orders.bulk-accept');
+        Route::post('/orders/bulk-submit', [OrderController::class, 'bulkComplete'])->name('orders.bulk-submit');
+        Route::post('/orders/bulk-complete', [OrderController::class, 'bulkComplete'])->name('orders.bulk-complete');
+        Route::post('/orders/bulk-reject', [OrderController::class, 'bulkReject'])->name('orders.bulk-reject');
+        Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+        Route::post('/orders/{order}/accept', [OrderController::class, 'accept'])->name('orders.accept');
+        Route::post('/orders/{order}/reject', [OrderController::class, 'reject'])->name('orders.reject');
+        Route::post('/orders/{order}/submit', [OrderController::class, 'submitForApproval'])->name('orders.submit');
+        Route::post('/orders/{order}/complete', [OrderController::class, 'submitForApproval'])->name('orders.complete');
+        Route::post('/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update-status');
     });
 });

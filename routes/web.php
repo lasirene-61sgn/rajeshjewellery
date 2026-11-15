@@ -70,7 +70,10 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
     Route::resource('work-orders', AdminWorkOrderController::class)->names('work_orders');
 
     Route::resource('orders', OrderController::class);
+    Route::post('orders/bulk-allocate', [OrderController::class, 'bulkAllocate'])->name('orders.bulk-allocate');
+    Route::post('orders/bulk-approve', [OrderController::class, 'bulkApprove'])->name('orders.bulk-approve');
     Route::post('orders/{order}/allocate', [OrderController::class, 'allocate'])->name('orders.allocate');
+    Route::post('orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
     Route::patch('orders/{order}/force-complete', [OrderController::class, 'forceComplete'])->name('orders.force-complete');
 });
 
@@ -102,6 +105,10 @@ Route::prefix('craftsman')->name('craftsman.')->middleware(['web', 'auth:craftsm
     Route::post('work-orders/bulk-submit', [CraftsmanWorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
 
     Route::get('orders', [CraftsmanOrderController::class, 'index'])->name('orders.index');
+    Route::post('orders/bulk-accept', [CraftsmanOrderController::class, 'bulkAccept'])->name('orders.bulk-accept');
+    Route::post('orders/bulk-complete', [CraftsmanOrderController::class, 'bulkComplete'])->name('orders.bulk-complete');
+    Route::post('orders/bulk-reject', [CraftsmanOrderController::class, 'bulkReject'])->name('orders.bulk-reject');
     Route::get('orders/{order}', [CraftsmanOrderController::class, 'show'])->name('orders.show');
+    Route::post('orders/{order}/submit', [CraftsmanOrderController::class, 'submitForApproval'])->name('orders.submit');
     Route::patch('orders/{order}/status', [CraftsmanOrderController::class, 'updateStatus'])->name('orders.update-status');
 });

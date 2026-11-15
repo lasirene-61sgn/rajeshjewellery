@@ -3,6 +3,13 @@
 @section('title', 'My Work Orders')
 
 @section('content')
+@php
+    $rawSearch = (string) request('search', '');
+    $activeRefNumbers = [];
+    if ($rawSearch !== '') {
+        $activeRefNumbers = array_values(array_filter(array_map('trim', preg_split('/[\r\n,;]+/', $rawSearch))));
+    }
+@endphp
 <div class="space-y-6 pb-24 lg:pb-0" x-data="{ 
     filterModal: false, 
     activeImageModal: false, 
@@ -31,6 +38,118 @@
     designCodeSearch: '',
     productNameSearch: '',
     nicknameSearch: '',
+    // Multi-Reference Number & Keyword Search States
+    refNumbers: @json($activeRefNumbers),
+    newRefInput: '',
+    get searchQueryValue() {
+        if (this.refNumbers.length > 0) {
+            return this.refNumbers.join(', ');
+        }
+        return this.newRefInput.trim();
+    },
+    addRefNumber() {
+        const raw = this.newRefInput.trim();
+        if (!raw) return;
+        const tokens = raw.split(/[\r\n,;]+/).map(t => t.trim()).filter(Boolean);
+        tokens.forEach(t => {
+            if (!this.refNumbers.includes(t)) {
+                this.refNumbers.push(t);
+            }
+        });
+        this.newRefInput = '';
+    },
+    addRefNumberAndSearch() {
+        this.addRefNumber();
+        this.submitForm();
+    },
+    removeRefNumber(index, submit = true) {
+        this.refNumbers.splice(index, 1);
+        if (submit) {
+            this.submitForm();
+        }
+    },
+    clearAllRefNumbers(submit = true) {
+        this.refNumbers = [];
+        this.newRefInput = '';
+        if (submit) {
+            this.submitForm();
+        }
+    },
+    handleRefPaste(e) {
+        const pastedText = (e.clipboardData || window.clipboardData)?.getData('text');
+        if (pastedText && (pastedText.includes('\n') || pastedText.includes('\r') || pastedText.includes(','))) {
+            e.preventDefault();
+            const tokens = pastedText.split(/[\r\n,;]+/).map(t => t.trim()).filter(Boolean);
+            tokens.forEach(t => {
+                if (!this.refNumbers.includes(t)) {
+                    this.refNumbers.push(t);
+                }
+            });
+            this.newRefInput = '';
+        }
+    },
+    submitForm() {
+        this.$nextTick(() => {
+            const desktopForm = document.getElementById('craftsmanFilterForm');
+            if (desktopForm && window.innerWidth >= 1024) {
+                desktopForm.submit();
+            } else {
+                const mobileForm = document.getElementById('craftsmanMobileFilterForm');
+                if (mobileForm) {
+                    mobileForm.submit();
+                } else if (desktopForm) {
+                    desktopForm.submit();
+                }
+            }
+        });
+    },
+
+    multiRefModalOpen: false,
+    multiRefInput: '',
+    get detectedRefTokens() {
+        if (!this.multiRefInput) return [];
+        const tokens = this.multiRefInput
+            .split(/[\r\n,;]+/)
+            .map(t => t.trim())
+            .filter(t => t.length > 0);
+        if (tokens.length === 1 && tokens[0].includes(' ')) {
+            const spaceTokens = tokens[0].split(/\s+/).map(t => t.trim()).filter(t => t.length > 0);
+            if (spaceTokens.length > 1) {
+                return spaceTokens;
+            }
+        }
+        return tokens;
+    },
+    openMultiRefModal() {
+        if (this.refNumbers.length > 0 && !this.multiRefInput) {
+            this.multiRefInput = this.refNumbers.join('\n');
+        } else if (!this.multiRefInput) {
+            const currentSearch = @js(request('search', ''));
+            if (currentSearch) {
+                const currentTokens = currentSearch.split(/[\r\n,;]+/).map(t => t.trim()).filter(Boolean);
+                this.multiRefInput = currentTokens.length > 1 ? currentTokens.join('\n') : currentSearch;
+            }
+        }
+        this.multiRefModalOpen = true;
+    },
+    closeMultiRefModal() {
+        this.multiRefModalOpen = false;
+    },
+    applyMultiRefSearch() {
+        const tokens = this.detectedRefTokens;
+        if (tokens.length > 0) {
+            tokens.forEach(t => {
+                if (!this.refNumbers.includes(t)) {
+                    this.refNumbers.push(t);
+                }
+            });
+            this.multiRefInput = '';
+            this.multiRefModalOpen = false;
+            this.submitForm();
+        } else {
+            this.multiRefModalOpen = false;
+        }
+    },
     toggleSelectAll() { 
         this.selectAll = !this.selectAll; 
         this.selectedOrders = this.selectAll ? [...document.querySelectorAll('.order-checkbox')].map(el => el.value) : []; 
@@ -121,12 +240,54 @@
 
     <!-- DESKTOP FILTER BAR & PER-PAGE SELECTOR -->
     <div class="hidden lg:block bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-        <form method="GET" action="{{ route('craftsman.work-orders.index') }}" class="flex flex-wrap items-end gap-4">
+        <form id="craftsmanFilterForm" method="GET" action="{{ route('craftsman.work-orders.index') }}" class="flex flex-wrap items-end gap-4">
             <input type="hidden" name="tab" value="{{ $currentTab }}">
 
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Search Keyword</label>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Order No, Reference..." class="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-colors">
+            <!-- Keyword & Multi-Ref Search (Box Type with X Mark) -->
+            <div class="flex-1 min-w-[280px]">
+                <div class="flex items-center justify-between mb-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Search Keyword</label>
+                        <span x-show="refNumbers.length > 0" class="px-2 py-0.5 rounded-full text-3xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200" x-text="refNumbers.length + (refNumbers.length === 1 ? ' Ref / Order No' : ' Ref / Order Nos')"></span>
+                    </div>
+                    <button type="button" @click="openMultiRefModal()" class="text-xs font-bold text-amber-600 hover:text-amber-800 hover:underline inline-flex items-center gap-1 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                        <span>Multi Ref Search</span>
+                    </button>
+                </div>
+
+                <!-- Interactive Box / Tag Container -->
+                <div class="min-h-[42px] px-2 py-1.5 border border-slate-300 rounded-xl bg-white focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-500 flex flex-wrap items-center gap-1.5 transition-all">
+                    <!-- Render each tag box with 'x' mark -->
+                    <template x-for="(ref, index) in refNumbers" :key="index">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-mono font-bold shadow-2xs">
+                            <span x-text="ref"></span>
+                            <button type="button" @click="removeRefNumber(index, true)" title="Remove this ref" class="text-amber-400 hover:text-rose-600 hover:bg-amber-100 rounded p-0.5 transition-colors">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </span>
+                    </template>
+
+                    <!-- Typing input -->
+                    <input type="text"
+                           x-ref="newRefInput"
+                           x-model="newRefInput"
+                           @keydown.enter.prevent="addRefNumberAndSearch()"
+                           @keydown.comma.prevent="addRefNumber()"
+                           @paste="handleRefPaste($event)"
+                           :placeholder="refNumbers.length === 0 ? 'Type Ref No, Order No, Code... (Enter to add)' : 'Add more...'"
+                           class="flex-1 min-w-[150px] border-0 p-1 text-sm focus:ring-0 focus:outline-none bg-transparent text-slate-800 placeholder-slate-400">
+
+                    <!-- Clear All button -->
+                    <button type="button" x-show="refNumbers.length > 0" @click="clearAllRefNumbers(true)" title="Clear all ref numbers" class="text-slate-400 hover:text-rose-600 p-1 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Hidden input submitted with the form -->
+                <input type="hidden" id="craftsmanSearchInput" name="search" :value="searchQueryValue">
             </div>
 
             <!-- Category Searchable Dropdown -->
@@ -271,7 +432,7 @@
 
             <div class="flex items-center gap-2 pb-0.5">
                 <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition-all">Filter</button>
-                @if(request()->anyFilled(['search', 'category', 'sub_category', 'design_code', 'nickname', 'product_name', 'date_from', 'date_to']))
+                @if(request()->anyFilled(['search', 'reference_no', 'category', 'sub_category', 'design_code', 'nickname', 'product_name', 'date_from', 'date_to']))
                 <a href="{{ route('craftsman.work-orders.index', ['tab' => $currentTab]) }}" class="px-4 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-colors">Clear</a>
                 @endif
             </div>
@@ -679,13 +840,45 @@
                 <h3 class="font-bold text-slate-800 text-lg">Filter & Search</h3>
                 <button @click="filterModal = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">&times;</button>
             </div>
-            <form method="GET" action="{{ route('craftsman.work-orders.index') }}" class="space-y-4">
+            <form id="craftsmanMobileFilterForm" method="GET" action="{{ route('craftsman.work-orders.index') }}" class="space-y-4">
                 <input type="hidden" name="tab" value="{{ $currentTab }}">
 
-                <!-- Search Keyword -->
+                <!-- Search Keyword with Multi Ref Box -->
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Search Keyword</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Order No, Reference, Name..." class="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-colors">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Search Keyword</label>
+                            <span x-show="refNumbers.length > 0" class="px-2 py-0.5 rounded-full text-3xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200" x-text="refNumbers.length + (refNumbers.length === 1 ? ' Ref No' : ' Ref Nos')"></span>
+                        </div>
+                        <button type="button" @click="openMultiRefModal()" class="text-xs font-bold text-amber-600 hover:text-amber-800 hover:underline inline-flex items-center gap-1 transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                            </svg>
+                            <span>Multi Ref</span>
+                        </button>
+                    </div>
+
+                    <div class="min-h-[42px] px-2 py-1.5 border border-slate-300 rounded-xl bg-white focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-500 flex flex-wrap items-center gap-1.5 transition-all">
+                        <template x-for="(ref, index) in refNumbers" :key="index">
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-mono font-bold shadow-2xs">
+                                <span x-text="ref"></span>
+                                <button type="button" @click="removeRefNumber(index, false)" class="text-amber-400 hover:text-rose-600 p-0.5">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </span>
+                        </template>
+                        <input type="text"
+                               x-model="newRefInput"
+                               @keydown.enter.prevent="addRefNumber()"
+                               @keydown.comma.prevent="addRefNumber()"
+                               @paste="handleRefPaste($event)"
+                               :placeholder="refNumbers.length === 0 ? 'Type Ref No, Order No... (Enter to add)' : 'Add more...'"
+                               class="flex-1 min-w-[130px] border-0 p-1 text-sm focus:ring-0 focus:outline-none bg-transparent text-slate-800 placeholder-slate-400">
+                        <button type="button" x-show="refNumbers.length > 0" @click="clearAllRefNumbers(false)" class="text-slate-400 hover:text-rose-600 p-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <input type="hidden" name="search" :value="searchQueryValue">
                 </div>
 
                 <!-- Category Searchable Dropdown -->
@@ -857,6 +1050,68 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Multi-Reference & Work Order Number Search -->
+    <div x-show="multiRefModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.outside="closeMultiRefModal()" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Search Multiple Work Order / Ref Nos</h3>
+                        <p class="text-xs text-slate-500">Paste or type reference / work order numbers from Excel, CSV, or a list</p>
+                    </div>
+                </div>
+                <button type="button" @click="closeMultiRefModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Reference / Work Order Numbers <span class="text-slate-400 font-normal lowercase">(one per line, comma or space separated)</span>
+                </label>
+                <textarea x-model="multiRefInput" rows="7" placeholder="e.g.&#10;REF-2026-001&#10;WO-2026-0001&#10;REF-2026-003&#10;WO-2026-0004" class="w-full text-xs font-mono rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"></textarea>
+                <div class="flex items-center justify-between mt-1 text-2xs text-slate-500">
+                    <div>
+                        <span class="font-bold text-amber-600" x-text="detectedRefTokens.length"></span>
+                        <span x-text="detectedRefTokens.length === 1 ? ' number detected' : ' numbers detected'"></span>
+                    </div>
+                    <button type="button" x-show="multiRefInput.trim().length > 0" @click="multiRefInput = ''" class="text-rose-600 hover:underline">
+                        Clear text
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview of detected tokens -->
+            <template x-if="detectedRefTokens.length > 0">
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 max-h-24 overflow-y-auto">
+                    <div class="text-3xs uppercase font-bold text-slate-400 mb-1">Detected List Preview:</div>
+                    <div class="flex flex-wrap gap-1">
+                        <template x-for="(token, idx) in detectedRefTokens.slice(0, 20)" :key="idx">
+                            <span class="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-3xs font-mono font-medium text-slate-700" x-text="token"></span>
+                        </template>
+                        <template x-if="detectedRefTokens.length > 20">
+                            <span class="text-3xs text-slate-500 font-medium py-0.5" x-text="'+ ' + (detectedRefTokens.length - 20) + ' more'"></span>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" @click="closeMultiRefModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                    Cancel
+                </button>
+                <button type="button" @click="applyMultiRefSearch()" :disabled="detectedRefTokens.length === 0" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-md transition-colors inline-flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <span>Apply & Search</span>
+                    <span x-show="detectedRefTokens.length > 0" class="px-1.5 py-0.5 text-3xs bg-amber-500 text-slate-900 rounded-full font-bold" x-text="detectedRefTokens.length"></span>
+                </button>
+            </div>
         </div>
     </div>
 </div>

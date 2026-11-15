@@ -3,7 +3,7 @@
 @section('title', 'Customer Orders')
 
 @section('content')
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ selectedOrders: [], bulkCraftsmanId: '', toggleSelectAll(e) { if(e.target.checked) { this.selectedOrders = [{{ $orders->pluck('id')->implode(',') }}]; } else { this.selectedOrders = []; } } }">
     <!-- Header & Action -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -42,11 +42,18 @@
                 <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'allocated' ? 'bg-sky-700 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['allocated'] }}</span>
             @endif
         </a>
-        <a href="{{ route('admin.orders.index', ['status' => 'in_process']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'in_process' ? 'bg-orange-500 text-white shadow-sm font-bold border border-orange-600' : 'bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-800 border border-slate-200' }}">
-            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'in_process' ? 'bg-white' : 'bg-orange-500' }}"></span>
+        <a href="{{ route('admin.orders.index', ['status' => 'in_process']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ in_array($currentStatus, ['in_process', 'in_progress']) ? 'bg-orange-500 text-white shadow-sm font-bold border border-orange-600' : 'bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ in_array($currentStatus, ['in_process', 'in_progress']) ? 'bg-white' : 'bg-orange-500' }}"></span>
             In Process
             @if(isset($counts))
-                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'in_process' ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['in_process'] }}</span>
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ in_array($currentStatus, ['in_process', 'in_progress']) ? 'bg-orange-600 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['in_process'] }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.orders.index', ['status' => 'for_approval']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'for_approval' ? 'bg-indigo-600 text-white shadow-sm font-bold border border-indigo-700' : 'bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-800 border border-slate-200' }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ $currentStatus == 'for_approval' ? 'bg-white' : 'bg-indigo-500 animate-pulse' }}"></span>
+            For Approval
+            @if(isset($counts))
+                <span class="ml-1 px-2 py-0.5 text-xs rounded-full {{ $currentStatus == 'for_approval' ? 'bg-indigo-700 text-white font-bold' : 'bg-slate-100 text-slate-600' }}">{{ $counts['for_approval'] }}</span>
             @endif
         </a>
         <a href="{{ route('admin.orders.index', ['status' => 'returned']) }}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all {{ $currentStatus == 'returned' ? 'bg-red-600 text-white shadow-sm font-bold border border-red-700' : 'bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-800 border border-slate-200' }}">
@@ -65,12 +72,59 @@
         </a>
     </div>
 
+    <!-- Bulk Actions Bar -->
+    <div x-show="selectedOrders.length > 0" x-cloak class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-center text-xs font-semibold text-indigo-900">
+            <span x-text="selectedOrders.length" class="mr-1 font-bold text-sm"></span> orders selected
+        </div>
+        <div class="flex flex-wrap items-center gap-4">
+            <!-- Bulk Allocate Form -->
+            <form method="POST" action="{{ route('admin.orders.bulk-allocate') }}" class="flex flex-wrap items-center gap-2 border-r border-indigo-200 pr-4">
+                @csrf
+                <template x-for="id in selectedOrders" :key="id">
+                    <input type="hidden" name="order_ids[]" :value="id">
+                </template>
+                
+                <select name="craftsman_id" required x-model="bulkCraftsmanId" class="px-3 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                    <option value="">-- Choose Craftsman --</option>
+                    @foreach($craftsmen as $craftsman)
+                        <option value="{{ $craftsman->id }}">{{ $craftsman->name }} ({{ $craftsman->mobile }})</option>
+                    @endforeach
+                </select>
+
+                <div class="flex items-center gap-1">
+                    <label class="text-2xs uppercase font-bold text-indigo-900">Due:</label>
+                    <input type="date" name="due_date" class="px-2 py-1.5 border border-indigo-300 rounded-lg text-xs bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <button type="submit" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">
+                    Bulk Allocate
+                </button>
+            </form>
+
+            <!-- Bulk Approve Form -->
+            <form method="POST" action="{{ route('admin.orders.bulk-approve') }}" onsubmit="return confirm('Approve all selected orders and mark them as completed?')" class="flex items-center">
+                @csrf
+                <template x-for="id in selectedOrders" :key="id">
+                    <input type="hidden" name="order_ids[]" :value="id">
+                </template>
+                <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">
+                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Bulk Approve (<span x-text="selectedOrders.length"></span>)
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- Orders Table Card -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200 text-left">
                 <thead class="bg-slate-50 text-slate-500 font-semibold text-xs uppercase tracking-wider">
                     <tr>
+                        <th class="p-4 w-4">
+                            <input type="checkbox" @change="toggleSelectAll($event)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        </th>
                         <th class="px-6 py-3.5">Image</th>
                         <th class="px-6 py-3.5">Reference / Product</th>
                         <th class="px-6 py-3.5">Craftsman / Allocation</th>
@@ -82,6 +136,9 @@
                 <tbody class="divide-y divide-slate-200 text-sm text-slate-700">
                     @forelse($orders as $order)
                         <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4 w-4 whitespace-nowrap">
+                                <input type="checkbox" :value="{{ $order->id }}" x-model="selectedOrders" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @if($order->image)
                                     <img src="{{ asset('storage/' . $order->image) }}" alt="Product" class="w-10 h-10 rounded-lg object-cover border border-slate-200 shadow-sm">
@@ -130,11 +187,13 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @php
                                     $badgeConfig = [
-                                        'pending'     => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
-                                        'allocated'   => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
-                                        'in_process'  => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
-                                        'returned'    => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
-                                        'completed'   => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed']
+                                        'pending'      => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200', 'dot' => 'bg-amber-400', 'label' => 'Pending'],
+                                        'allocated'    => ['bg' => 'bg-sky-50 text-sky-800 border-sky-200', 'dot' => 'bg-sky-500', 'label' => 'Allocated'],
+                                        'in_process'   => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'in_progress'  => ['bg' => 'bg-indigo-50 text-indigo-700 border-indigo-200', 'dot' => 'bg-orange-500', 'label' => 'In process'],
+                                        'for_approval' => ['bg' => 'bg-indigo-50 text-indigo-800 border-indigo-200', 'dot' => 'bg-indigo-500 animate-pulse', 'label' => 'For Approval'],
+                                        'returned'     => ['bg' => 'bg-rose-50 text-rose-800 border-rose-200 font-bold', 'dot' => 'bg-red-500', 'label' => 'Returned'],
+                                        'completed'    => ['bg' => 'bg-emerald-50 text-emerald-800 border-emerald-200', 'dot' => 'bg-emerald-500', 'label' => 'Completed']
                                     ];
                                     $st = $badgeConfig[$order->status] ?? ['bg' => 'bg-slate-100 text-slate-800 border-slate-200', 'dot' => 'bg-slate-400', 'label' => ucwords(str_replace('_', ' ', $order->status))];
                                 @endphp
@@ -155,7 +214,15 @@
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                     </a>
 
-                                    @if($order->status !== 'completed')
+                                    @if($order->status === 'for_approval')
+                                        <form action="{{ route('admin.orders.approve', $order->id) }}" method="POST" onsubmit="return confirm('Approve this order and mark as completed?');" class="inline">
+                                            @csrf
+                                            <button type="submit" class="inline-flex items-center px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors" title="Approve & Complete Order">
+                                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                                Approve
+                                            </button>
+                                        </form>
+                                    @elseif($order->status !== 'completed')
                                         <form action="{{ route('admin.orders.force-complete', $order->id) }}" method="POST" onsubmit="return confirm('Force complete this order?');" class="inline">
                                             @csrf
                                             @method('PATCH')
@@ -177,7 +244,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-6 py-12 text-center text-slate-400">No orders found</td>
+                            <td colspan="7" class="px-6 py-12 text-center text-slate-400">No orders found</td>
                         </tr>
                     @endforelse
                 </tbody>

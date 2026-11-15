@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class WorkOrderController extends Controller
@@ -26,14 +27,13 @@ class WorkOrderController extends Controller
         $today = Carbon::today()->toDateString();
         $query = WorkOrder::where('craftsman_id', $craftsmanId)->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
+        // 1. Search & Multi-Ref Query (supports multiple work order nos, ref nos, and keywords)
         if ($request->filled('search')) {
-            $search = trim($request->search);
-            $query->where(function ($q) use ($search) {
-                $q->where('work_order_no', 'like', "%{$search}%")
-                    ->orWhere('reference_no', 'like', "%{$search}%")
-                    ->orWhere('product_name', 'like', "%{$search}%")
-                    ->orWhere('design_code', 'like', "%{$search}%");
-            });
+            $this->applySearchFilter($query, $request->search);
+        }
+
+        if ($request->filled('reference_no')) {
+            $this->applyRefNoFilter($query, $request->reference_no);
         }
 
         if ($request->filled('category')) {
@@ -344,5 +344,93 @@ class WorkOrderController extends Controller
             ->get();
 
         return view('craftsman.work_orders.print', compact('workOrders'));
+    }
+
+    /**
+     * Apply flexible search filter supporting multi-token references, work order numbers, and keyword matching.
+     */
+    protected function applySearchFilter(mixed $query, mixed $search): void
+    {
+        $rawSearch = trim((string) $search);
+        if ($rawSearch === '') {
+            return;
+        }
+
+        // Check for multiple tokens separated by commas, semicolons, or newlines
+        $multiTokens = preg_split('/[\r\n,;]+/', $rawSearch, -1, PREG_SPLIT_NO_EMPTY);
+        $multiTokens = array_values(array_filter(array_map('trim', $multiTokens)));
+
+        // If only 1 token resulted, check if it contains space-separated tokens resembling reference or work order numbers
+        if (count($multiTokens) === 1) {
+            $spaceTokens = preg_split('/\s+/', $multiTokens[0], -1, PREG_SPLIT_NO_EMPTY);
+            if (count($spaceTokens) > 1 && collect($spaceTokens)->every(fn ($t) => preg_match('/^(REF|WO|\d|[A-Z]{2,}-\d)/i', $t))) {
+                $multiTokens = $spaceTokens;
+            }
+        }
+
+        if (count($multiTokens) > 1) {
+            $query->where(function ($q) use ($multiTokens) {
+                // Exact matching on indexed columns
+                $q->whereIn('reference_no', $multiTokens)
+                    ->orWhereIn('work_order_no', $multiTokens);
+
+                // Partial matching across reference numbers, work order numbers, and details
+                if (count($multiTokens) <= 50) {
+                    foreach ($multiTokens as $token) {
+                        $q->orWhere('reference_no', 'like', "%{$token}%")
+                            ->orWhere('work_order_no', 'like', "%{$token}%")
+                            ->orWhere('design_code', 'like', "%{$token}%")
+                            ->orWhere('product_name', 'like', "%{$token}%");
+                    }
+                }
+            });
+
+            return;
+        }
+
+        // Standard single search term
+        $query->where(function ($q) use ($rawSearch) {
+            $q->where('work_order_no', 'like', "%{$rawSearch}%")
+                ->orWhere('reference_no', 'like', "%{$rawSearch}%")
+                ->orWhere('product_name', 'like', "%{$rawSearch}%")
+                ->orWhere('design_code', 'like', "%{$rawSearch}%")
+                ->orWhere('design_nickname', 'like', "%{$rawSearch}%")
+                ->orWhere('seal', 'like', "%{$rawSearch}%")
+                ->orWhereExists(function ($sub) use ($rawSearch) {
+                    $sub->select(DB::raw(1))
+                        ->from('design_codes')
+                        ->whereColumn('design_codes.code', 'work_orders.design_code')
+                        ->where('design_codes.nickname', 'like', "%{$rawSearch}%");
+                });
+        });
+    }
+
+    /**
+     * Apply explicit reference number filter (supports single, array, comma/newline/space separated).
+     */
+    protected function applyRefNoFilter(mixed $query, mixed $referenceNo): void
+    {
+        if (blank($referenceNo)) {
+            return;
+        }
+
+        $refs = is_array($referenceNo)
+            ? $referenceNo
+            : preg_split('/[\r\n,;\s]+/', (string) $referenceNo, -1, PREG_SPLIT_NO_EMPTY);
+        $refs = array_values(array_filter(array_map('trim', $refs)));
+
+        if (! empty($refs)) {
+            $query->where(function ($q) use ($refs) {
+                $q->whereIn('reference_no', $refs)
+                    ->orWhereIn('work_order_no', $refs);
+
+                if (count($refs) <= 50) {
+                    foreach ($refs as $r) {
+                        $q->orWhere('reference_no', 'like', "%{$r}%")
+                            ->orWhere('work_order_no', 'like', "%{$r}%");
+                    }
+                }
+            });
+        }
     }
 }

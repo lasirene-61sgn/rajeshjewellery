@@ -18,19 +18,24 @@ class OrderController extends Controller
         $query = Order::with('craftsman');
 
         if ($request->has('status') && !empty($request->status)) {
-            $query->where('status', $request->status);
+            if (in_array($request->status, ['in_process', 'in_progress'])) {
+                $query->whereIn('status', ['in_process', 'in_progress']);
+            } else {
+                $query->where('status', $request->status);
+            }
         }
 
         $orders = $query->latest()->paginate(10);
         $craftsmen = Craftsman::all();
 
         $counts = [
-            'all'        => Order::count(),
-            'pending'    => Order::where('status', 'pending')->count(),
-            'allocated'  => Order::where('status', 'allocated')->count(),
-            'in_process' => Order::where('status', 'in_process')->count(),
-            'returned'   => Order::where('status', 'returned')->count(),
-            'completed'  => Order::where('status', 'completed')->count(),
+            'all'          => Order::count(),
+            'pending'      => Order::where('status', 'pending')->count(),
+            'allocated'    => Order::where('status', 'allocated')->count(),
+            'in_process'   => Order::whereIn('status', ['in_process', 'in_progress'])->count(),
+            'for_approval' => Order::where('status', 'for_approval')->count(),
+            'returned'     => Order::where('status', 'returned')->count(),
+            'completed'    => Order::where('status', 'completed')->count(),
         ];
 
         return view('admin.orders.index', compact('orders', 'craftsmen', 'counts'));
@@ -133,7 +138,9 @@ class OrderController extends Controller
         $oldCraftsmanId = $order->craftsman_id;
 
         if (!empty($data['craftsman_id'])) {
-            $data['status'] = 'allocated';
+            if ($oldCraftsmanId != $data['craftsman_id'] || $order->status === 'pending') {
+                $data['status'] = 'allocated';
+            }
         } else {
             $data['craftsman_id'] = null;
             $data['status'] = 'pending';
@@ -183,6 +190,91 @@ class OrderController extends Controller
         );
 
         return back()->with('success', 'Order allocated to craftsman successfully.');
+    }
+
+    public function bulkAllocate(Request $request)
+    {
+        $request->validate([
+            'order_ids'    => ['required', 'array', 'min:1'],
+            'order_ids.*'  => ['exists:orders,id'],
+            'craftsman_id' => ['required', 'exists:craftsmen,id'],
+            'due_date'     => ['nullable', 'date'],
+        ]);
+
+        $craftsman = Craftsman::find($request->craftsman_id);
+        $orders = Order::whereIn('id', $request->order_ids)->get();
+
+        foreach ($orders as $order) {
+            $updateData = [
+                'craftsman_id' => $craftsman->id,
+                'status'       => 'allocated',
+            ];
+
+            if ($request->filled('due_date')) {
+                $updateData['due_date'] = $request->due_date;
+            }
+
+            $order->update($updateData);
+
+            $order->logActivity(
+                action: 'allocated',
+                note: "Order allocated to Craftsman {$craftsman->name} via bulk action.",
+                details: [
+                    'craftsman_id'   => $craftsman->id,
+                    'craftsman_name' => $craftsman->name,
+                ]
+            );
+        }
+
+        return back()->with('success', count($request->order_ids) . " orders allocated to {$craftsman->name} successfully.");
+    }
+
+    public function bulkApprove(Request $request)
+    {
+        $request->validate([
+            'order_ids'   => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['exists:orders,id'],
+        ]);
+
+        $orders = Order::whereIn('id', $request->order_ids)->get();
+
+        foreach ($orders as $order) {
+            $order->update([
+                'status' => 'completed',
+            ]);
+
+            $craftsmanName = optional($order->craftsman)->name ?? 'Craftsman';
+            $order->logActivity(
+                action: 'completed',
+                note: "Order approved and marked completed via bulk action by Admin.",
+                details: [
+                    'status'         => 'completed',
+                    'craftsman_name' => $craftsmanName,
+                ]
+            );
+        }
+
+        return back()->with('success', count($request->order_ids) . ' orders approved and marked as completed.');
+    }
+
+    public function approve(Order $order)
+    {
+        $order->update([
+            'status' => 'completed'
+        ]);
+
+        $craftsmanName = optional($order->craftsman)->name ?? 'Craftsman';
+
+        $order->logActivity(
+            action: 'completed',
+            note: "Order approved and marked completed by Admin.",
+            details: [
+                'status'         => 'completed',
+                'craftsman_name' => $craftsmanName,
+            ]
+        );
+
+        return back()->with('success', "Order #{$order->reference_number} approved and marked completed successfully.");
     }
 
     public function forceComplete(Order $order)
