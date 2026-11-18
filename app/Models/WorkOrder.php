@@ -61,6 +61,8 @@ class WorkOrder extends Model
     protected $appends = [
         'has_seal',
         'balance_quantity',
+        'is_reorder',
+        'is_returned',
     ];
 
     #[Override]
@@ -262,5 +264,15 @@ class WorkOrder extends Model
         return !empty($this->attributes['seal'] ?? null) 
             || !empty($this->seal) 
             || (stripos((string) ($this->reference_no ?? ''), 'ESO') !== false);
+    }
+
+    public function getIsReorderAttribute(): bool
+    {
+        return $this->status === 'returned' || ($this->return_count ?? 0) > 0;
+    }
+
+    public function getIsReturnedAttribute(): bool
+    {
+        return $this->status === 'returned' || ($this->return_count ?? 0) > 0;
     }
 }

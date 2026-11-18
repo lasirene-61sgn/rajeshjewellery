@@ -26,7 +26,7 @@ class WorkOrderController extends Controller
     /**
      * Process, enhance resolution, stamp seal, and save jewelry design image.
      */
-    protected function processAndSaveDesignImage(UploadedFile $file, string $referenceNo = '', string $sealValue = ''): string
+    protected function processAndSaveDesignImage(UploadedFile $file, string $referenceNo = '', string $sealValue = '', bool $isReorder = false): string
     {
         $filePath = $file->getRealPath();
         $info = @getimagesize($filePath);
@@ -76,7 +76,8 @@ class WorkOrderController extends Controller
         imageconvolution($canvas, $sharpenMatrix, $divisor, $offset);
 
         // 3. APPLY 916 SEAL (if ESO in reference or seal requested)
-        if (stripos($referenceNo, 'ESO') !== false || ! empty($sealValue)) {
+        $hasSeal = stripos($referenceNo, 'ESO') !== false || ! empty($sealValue);
+        if ($hasSeal) {
             $x = 40;
             $y = 40;
             $text = ' 916 SEAL ';
@@ -101,6 +102,39 @@ class WorkOrderController extends Controller
 
             $padding = 15;
             $bgColor = imagecolorallocate($canvas, 245, 158, 11);
+            imagefilledrectangle($canvas, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
+
+            imagecopyresampled($canvas, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
+            imagedestroy($smallImg);
+        }
+
+        // 3.5. APPLY REORDER STAMP (if returned order / reorder)
+        if ($isReorder) {
+            $sealOffset = $hasSeal ? ((strlen(' 916 SEAL ') * imagefontwidth(5) * 4) + 60) : 0;
+            $x = 40 + $sealOffset;
+            $y = 40;
+            $text = ' REORDER ';
+            $scale = 4;
+
+            $font = 5;
+            $fontWidth = imagefontwidth($font);
+            $fontHeight = imagefontheight($font);
+
+            $textW = strlen($text) * $fontWidth;
+            $textH = $fontHeight;
+
+            $scaledW = $textW * $scale;
+            $scaledH = $textH * $scale;
+
+            $smallImg = imagecreatetruecolor($textW, $textH);
+            $bgColorSmall = imagecolorallocate($smallImg, 220, 38, 38);
+            $textColorSmall = imagecolorallocate($smallImg, 255, 255, 255);
+
+            imagefill($smallImg, 0, 0, $bgColorSmall);
+            imagestring($smallImg, $font, 0, 0, $text, $textColorSmall);
+
+            $padding = 15;
+            $bgColor = imagecolorallocate($canvas, 220, 38, 38);
             imagefilledrectangle($canvas, $x - $padding, $y - $padding, $x + $scaledW + $padding, $y + $scaledH + $padding, $bgColor);
 
             imagecopyresampled($canvas, $smallImg, $x, $y, 0, 0, $scaledW, $scaledH, $textW, $textH);
@@ -330,7 +364,8 @@ class WorkOrderController extends Controller
             $validated['design_image'] = $this->processAndSaveDesignImage(
                 $request->file('design_image'),
                 $validated['reference_no'] ?? '',
-                $validated['seal'] ?? ''
+                $validated['seal'] ?? '',
+                false
             );
         }
 
@@ -470,7 +505,8 @@ class WorkOrderController extends Controller
             $validated['design_image'] = $this->processAndSaveDesignImage(
                 $request->file('design_image'),
                 $validated['reference_no'] ?? '',
-                $validated['seal'] ?? ''
+                $validated['seal'] ?? '',
+                $workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0
             );
         }
 

@@ -540,11 +540,16 @@
                             <td class="px-4 py-3">
                                 <div class="relative w-12 h-12">
                                     @if($order->design_image)
-                                        <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}', {{ ($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal)) ? 'true' : 'false' }})" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
+                                        <img @click="openImageModal('{{ asset('storage/' . $order->design_image) }}', {{ ($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal)) ? 'true' : 'false' }}, {{ ($order->is_reorder || $order->status === 'returned' || ($order->return_count ?? 0) > 0) ? 'true' : 'false' }})" src="{{ asset('storage/' . $order->design_image) }}" alt="Design" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity">
                                     @else
                                         <div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-medium border border-slate-200">
                                             N/A
                                         </div>
+                                    @endif
+                                    @if($order->is_reorder || $order->status === 'returned' || ($order->return_count ?? 0) > 0)
+                                        <span class="absolute -top-1.5 -left-1.5 bg-red-600 text-white text-[7px] font-black px-1 py-0.5 rounded shadow leading-none uppercase tracking-wider border border-white z-10">
+                                            REORDER
+                                        </span>
                                     @endif
                                     @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                                         <span class="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow leading-none uppercase tracking-wider border border-white">
@@ -946,6 +951,11 @@
             </button>
             <div class="relative">
                 <img :src="selectedImageUrl" class="w-full h-auto max-h-[85vh] object-contain rounded-xl shadow-2xl">
+                <template x-if="selectedImageIsReorder">
+                    <span class="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black text-xs sm:text-sm px-4 py-1.5 rounded-lg shadow-xl uppercase tracking-widest border-2 border-white z-20 whitespace-nowrap">
+                        REORDER
+                    </span>
+                </template>
                 <template x-if="selectedImageHasSeal">
                     <span class="absolute top-4 left-4 bg-amber-500 text-white font-black text-xs sm:text-sm px-3 py-1.5 rounded-lg shadow-xl uppercase tracking-wider border-2 border-white">
                         916 SEAL
@@ -1042,6 +1052,7 @@
             imageModalOpen: false,
             selectedImageUrl: '',
             selectedImageHasSeal: false,
+            selectedImageIsReorder: false,
             selectedOrderId: null,
             selectedOrderNo: '',
             selectedCraftsmanId: '',
@@ -1166,9 +1177,10 @@
                 this.selectedOrderNo = no;
                 this.returnModalOpen = true;
             },
-            openImageModal(url, hasSeal = false) {
+            openImageModal(url, hasSeal = false, isReorder = false) {
                 this.selectedImageUrl = url;
                 this.selectedImageHasSeal = hasSeal;
+                this.selectedImageIsReorder = isReorder;
                 this.imageModalOpen = true;
             },
             openSingleRejectModal(id, no) {

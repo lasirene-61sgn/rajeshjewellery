@@ -21,11 +21,18 @@
         <div>
             <div class="flex items-center justify-between mb-1">
                 <label class="block text-xs font-semibold uppercase text-slate-700">Design Image</label>
-                @if($workOrder->has_seal)
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black bg-amber-500 text-white shadow-sm uppercase tracking-wide">
-                        916 SEAL
-                    </span>
-                @endif
+                <div class="flex items-center gap-1.5">
+                    @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black bg-red-600 text-white shadow-sm uppercase tracking-wide">
+                            REORDER
+                        </span>
+                    @endif
+                    @if($workOrder->has_seal)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black bg-amber-500 text-white shadow-sm uppercase tracking-wide">
+                            916 SEAL
+                        </span>
+                    @endif
+                </div>
             </div>
             
             @if($workOrder->design_image)
@@ -33,6 +40,11 @@
                 <a href="{{ asset('storage/' . $workOrder->design_image) }}" target="_blank">
                     <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design" class="w-20 h-20 object-cover rounded-lg border shadow-sm">
                 </a>
+                @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                <span class="absolute top-1 left-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow leading-none uppercase border border-white z-10">
+                    REORDER
+                </span>
+                @endif
                 @if($workOrder->has_seal)
                 <span class="absolute bottom-1 right-1 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow leading-none uppercase">
                     916 SEAL

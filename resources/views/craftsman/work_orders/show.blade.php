@@ -96,6 +96,11 @@
                     @else
                         <div class="text-stone-400 text-xs font-bold">No Design Image</div>
                     @endif
+                    @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                        <span class="absolute top-3 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow-md uppercase tracking-wider border-2 border-white z-10 whitespace-nowrap">
+                            REORDER
+                        </span>
+                    @endif
                     @if($workOrder->has_seal || stripos((string)$workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
                         <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider">
                             916 SEAL

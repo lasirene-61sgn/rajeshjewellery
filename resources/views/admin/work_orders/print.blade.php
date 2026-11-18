@@ -59,6 +59,13 @@
 
             <!-- Main Jewelry Design Image Container -->
             <div class="w-full flex-1 flex items-center justify-center p-2 overflow-hidden bg-stone-50 relative">
+                <!-- Reorder highlight positioned at top center of image container -->
+                @if($order->is_reorder || $order->status === 'returned' || ($order->return_count ?? 0) > 0)
+                <div style="background-color: #dc2626 !important; color: #ffffff !important; border: 3px solid #7f1d1d !important;" class="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-black text-base sm:text-lg px-6 py-2 rounded-lg shadow-xl uppercase tracking-widest border-2 border-red-950 text-center whitespace-nowrap z-20">
+                    REORDER
+                </div>
+                @endif
+
                 @if($order->design_image)
                 <img
                     src="{{ asset('storage/' . $order->design_image) }}"

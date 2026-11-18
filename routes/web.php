@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\CraftsmanController as AdminCraftsmanController;
+use App\Http\Controllers\Admin\CraftsmanImageController;
 // Admin Controllers
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DesignCodeController as AdminDesignCodeController;
@@ -40,6 +41,10 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
 
     Route::post('craftsmen/{craftsman}/auto-assign', [AdminCraftsmanController::class, 'autoAssign'])->name('craftsmen.auto-assign');
     Route::resource('craftsmen', AdminCraftsmanController::class);
+
+    // Craftsman Images routes
+    Route::get('craftsman-images', [CraftsmanImageController::class, 'index'])->name('craftsman_images.index');
+    Route::get('craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('craftsman_images.show');
 
     // Custom static endpoints before dynamic or resource routes
     Route::get('design-codes/unassigned', [AdminDesignCodeController::class, 'unassigned'])->name('design_codes.unassigned');

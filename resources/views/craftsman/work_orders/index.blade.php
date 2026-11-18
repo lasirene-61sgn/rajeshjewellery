@@ -487,6 +487,11 @@
                             <div class="text-slate-300 text-xs font-bold">N/A</div>
                             @endif
                             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                            @if($order->is_reorder || $order->status === 'returned' || ($order->return_count ?? 0) > 0)
+                            <span class="absolute top-2 left-2 z-10 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow uppercase tracking-wider border border-white">
+                                REORDER
+                            </span>
+                            @endif
                             @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                             <span class="absolute bottom-2 right-2 z-10 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow uppercase tracking-wider flex items-center gap-0.5">
                                 916 SEAL
@@ -614,6 +619,11 @@
                                     @else
                                     <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-xs font-bold">N/A</div>
                                     @endif
+                                    @if($order->is_reorder || $order->status === 'returned' || ($order->return_count ?? 0) > 0)
+                                    <span class="absolute -top-1.5 -left-1.5 bg-red-600 text-white text-[7px] font-black px-1 py-0.5 rounded shadow leading-none uppercase tracking-wider border border-white z-10">
+                                        REORDER
+                                    </span>
+                                    @endif
                                     @if($order->has_seal || stripos((string)$order->reference_no, 'ESO') !== false || !empty($order->seal))
                                     <span class="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded shadow leading-none uppercase">
                                         916
@@ -724,6 +734,11 @@
                 </template>
                 <template x-if="!ordersList[currentIndex] || !ordersList[currentIndex].design_image">
                     <span class="text-slate-400 text-sm font-bold">No Image Available</span>
+                </template>
+                <template x-if="ordersList[currentIndex]?.is_reorder || ordersList[currentIndex]?.status === 'returned' || (ordersList[currentIndex]?.return_count && ordersList[currentIndex].return_count > 0)">
+                    <span class="absolute top-3 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow uppercase tracking-wider border-2 border-white z-20 whitespace-nowrap">
+                        REORDER
+                    </span>
                 </template>
                 <template x-if="ordersList[currentIndex]?.has_seal || ordersList[currentIndex]?.seal || (ordersList[currentIndex]?.reference_no && ordersList[currentIndex].reference_no.toUpperCase().includes('ESO'))">
                     <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-lg shadow uppercase">

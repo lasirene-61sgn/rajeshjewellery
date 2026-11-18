@@ -167,11 +167,18 @@
             @forelse($recentOrders as $order)
                 <div class="p-4 flex flex-col sm:flex-ro sm:items-center sm:justify-between gap-3 hover:bg-stone-50">
                     <div class="flex items-center gap-3">
-                        @if($order->design_image)
-                            <img src="{{ asset('storage/' . $order->design_image) }}" class="w-12 h-12 rounded-xl object-cover border border-stone-200">
-                        @else
-                            <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-700 text-xs font-bold">N/A</div>
-                        @endif
+                        <div class="relative shrink-0 w-12 h-12">
+                            @if($order->design_image)
+                                <img src="{{ asset('storage/' . $order->design_image) }}" class="w-12 h-12 rounded-xl object-cover border border-stone-200">
+                            @else
+                                <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-700 text-xs font-bold">N/A</div>
+                            @endif
+                            @if($order->is_reorder || $order->status === 'returned' || ($order->return_count ?? 0) > 0)
+                                <span class="absolute -top-1.5 -left-1.5 bg-red-600 text-white text-[7px] font-black px-1 py-0.5 rounded shadow leading-none uppercase tracking-wider border border-white z-10">
+                                    REORDER
+                                </span>
+                            @endif
+                        </div>
                         <div>
                             <div class="font-bold text-stone-800 text-sm flex items-center gap-2">
                                 <span>{{ $order->work_order_no }}</span>

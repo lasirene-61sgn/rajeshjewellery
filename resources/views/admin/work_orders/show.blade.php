@@ -117,6 +117,11 @@
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-2">Design Image</span>
                 <div class="relative inline-block">
                     <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design Image" class="w-36 h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
+                    @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                        <span class="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-black px-2 py-0.5 rounded shadow uppercase tracking-wide border border-white z-10">
+                            REORDER
+                        </span>
+                    @endif
                     @if($workOrder->has_seal || stripos((string)$workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
                         <span class="absolute bottom-2 right-2 bg-amber-500 text-white text-[11px] font-black px-2 py-0.5 rounded shadow uppercase">
                             916 SEAL
