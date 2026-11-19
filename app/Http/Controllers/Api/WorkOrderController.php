@@ -1256,7 +1256,7 @@ class WorkOrderController extends Controller
                 $badgeY = (int) round($targetH * 0.035);
 
                 imagefilledrectangle($canvas, $badgeX - 4, $badgeY - 4, $badgeX + $badgeW + 4, $badgeY + $badgeH + 4, $badgeBorder);
-                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeY + $badgeH, $badgeBg);
                 imagettftext($canvas, $fontSize, 0, $badgeX + $padX, $badgeY + $padY + $textH, $textColor, $fontPath, $text);
             } else {
                 $font = 5;
@@ -1270,7 +1270,7 @@ class WorkOrderController extends Controller
                 $badgeY = (int) round($targetH * 0.035);
 
                 imagefilledrectangle($canvas, $badgeX - 2, $badgeY - 2, $badgeX + $badgeW + 2, $badgeY + $badgeH + 2, $badgeBorder);
-                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeY + $badgeH, $badgeBg);
                 imagestring($canvas, $font, $badgeX + $pad, $badgeY + $pad, $text, $textColor);
             }
         }
@@ -1291,7 +1291,7 @@ class WorkOrderController extends Controller
                 $badgeY = (int) round($targetH - $badgeH - ($targetH * 0.035));
 
                 imagefilledrectangle($canvas, $badgeX - 4, $badgeY - 4, $badgeX + $badgeW + 4, $badgeY + $badgeH + 4, $badgeBorder);
-                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeY + $badgeH, $badgeBg);
                 imagettftext($canvas, $fontSize, 0, $badgeX + $padX, $badgeY + $padY + $textH, $textColor, $fontPath, $text);
             } else {
                 $font = 5;
@@ -1305,7 +1305,7 @@ class WorkOrderController extends Controller
                 $badgeY = (int) round($targetH - $badgeH - ($targetH * 0.035));
 
                 imagefilledrectangle($canvas, $badgeX - 2, $badgeY - 2, $badgeX + $badgeW + 2, $badgeY + $badgeH + 2, $badgeBorder);
-                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeY + $badgeH, $badgeBg);
                 imagestring($canvas, $font, $badgeX + $pad, $badgeY + $pad, $text, $textColor);
             }
         }
