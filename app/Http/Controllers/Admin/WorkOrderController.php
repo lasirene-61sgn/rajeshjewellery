@@ -215,7 +215,7 @@ class WorkOrderController extends Controller
                 $selectedOrderTypes = [];
             }
             if (! empty($selectedOrderTypes)) {
-                $query->whereIn('order_type', $selectedOrderTypes);
+                $this->applyOrderTypeFilter($query, $selectedOrderTypes);
             }
         } else {
             $selectedOrderTypes = [];
@@ -277,7 +277,11 @@ class WorkOrderController extends Controller
         $categories = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category')->sort()->values();
         $subcategories = WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->pluck('subcategory')->sort()->values();
         $nicknames = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->whereColumn('nickname', '!=', 'code')->orderBy('nickname')->pluck('nickname')->unique()->values();
-        $orderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type')->sort()->values();
+        $orderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->pluck('order_type');
+        if (! $orderTypes->contains(fn ($val) => strcasecmp($val, 'ESO') === 0)) {
+            $orderTypes->push('ESO');
+        }
+        $orderTypes = $orderTypes->sort()->values();
         $craftsmen = Craftsman::orderBy('name')->get();
         $designCodes = DesignCode::with('craftsmen')->orderBy('code')->get();
         $productNames = WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->pluck('product_name')->sort()->values();
@@ -753,6 +757,14 @@ class WorkOrderController extends Controller
 
         $workOrder->update($data);
 
+        // Invalidate any previously cached stamped images for this work order
+        $cachedFiles = glob(storage_path("app/public/work_orders/stamped/wo_{$workOrder->id}_*.jpg"));
+        if ($cachedFiles) {
+            foreach ($cachedFiles as $file) {
+                @unlink($file);
+            }
+        }
+
         $craftsmanName = optional($workOrder->craftsman)->name ?? 'Craftsman';
         $workOrder->logActivity(
             action: 'returned',
@@ -1003,7 +1015,7 @@ class WorkOrderController extends Controller
                     $selectedOrderTypes = [];
                 }
                 if (! empty($selectedOrderTypes)) {
-                    $query->whereIn('order_type', $selectedOrderTypes);
+                    $this->applyOrderTypeFilter($query, $selectedOrderTypes);
                 }
             }
 
@@ -1401,5 +1413,53 @@ class WorkOrderController extends Controller
                 }
             });
         }
+    }
+
+    /**
+     * Apply order type filter (supports multiple selection and special 'ESO' reference matching).
+     */
+    protected function applyOrderTypeFilter(mixed $query, mixed $orderTypes): void
+    {
+        if (empty($orderTypes)) {
+            return;
+        }
+
+        if (is_string($orderTypes)) {
+            $orderTypes = array_values(array_filter(array_map('trim', explode(',', $orderTypes))));
+        } elseif (is_array($orderTypes)) {
+            $orderTypes = array_values(array_filter(array_map('trim', $orderTypes)));
+        } else {
+            return;
+        }
+
+        if (empty($orderTypes)) {
+            return;
+        }
+
+        $hasEso = false;
+        $otherTypes = [];
+        foreach ($orderTypes as $type) {
+            if (strcasecmp($type, 'ESO') === 0) {
+                $hasEso = true;
+            } else {
+                $otherTypes[] = $type;
+            }
+        }
+
+        $query->where(function ($q) use ($hasEso, $otherTypes) {
+            if (! empty($otherTypes)) {
+                $q->whereIn('order_type', $otherTypes);
+            }
+
+            if ($hasEso) {
+                if (! empty($otherTypes)) {
+                    $q->orWhere('order_type', 'ESO')
+                      ->orWhere('reference_no', 'like', '%ESO%');
+                } else {
+                    $q->where('order_type', 'ESO')
+                      ->orWhere('reference_no', 'like', '%ESO%');
+                }
+            }
+        });
     }
 }

@@ -38,7 +38,7 @@
             @if($workOrder->design_image)
             <div class="relative inline-block mb-2">
                 <a href="{{ asset('storage/' . $workOrder->design_image) }}" target="_blank">
-                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design" class="w-20 h-20 object-cover rounded-lg border shadow-sm">
+                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design" class="w-20 h-20 object-cover rounded-lg border shadow-sm hover:opacity-90 transition-opacity">
                 </a>
                 @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
                 <span class="absolute top-1 left-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow leading-none uppercase border border-white z-10">

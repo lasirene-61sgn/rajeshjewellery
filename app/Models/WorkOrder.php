@@ -266,6 +266,11 @@ class WorkOrder extends Model
             || (stripos((string) ($this->reference_no ?? ''), 'ESO') !== false);
     }
 
+    public function getNeed916SealAttribute(): bool
+    {
+        return $this->has_seal;
+    }
+
     public function getIsReorderAttribute(): bool
     {
         return $this->status === 'returned' || ($this->return_count ?? 0) > 0;
@@ -274,5 +279,14 @@ class WorkOrder extends Model
     public function getIsReturnedAttribute(): bool
     {
         return $this->status === 'returned' || ($this->return_count ?? 0) > 0;
+    }
+
+    public function getStampedImageUrlAttribute(): ?string
+    {
+        if (empty($this->design_image)) {
+            return null;
+        }
+
+        return url('/api/work-orders/' . $this->id . '/image');
     }
 }

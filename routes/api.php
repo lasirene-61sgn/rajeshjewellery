@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CraftsmanController;
+use App\Http\Controllers\Api\CraftsmanImageController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\WorkOrderController;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/login', [AuthController::class, 'login'])->name('api.login');
 Route::post('/common/login', [AuthController::class, 'login'])->name('api.common.login');
+Route::get('/work-orders/{workOrder}/image', [WorkOrderController::class, 'serveImage'])->name('api.work-orders.image');
 
 /*
 |--------------------------------------------------------------------------
@@ -93,6 +95,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('api.craftsmen.index');
     Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('api.craftsmen.show');
 
+    // 5. Craftsman Images Module (Admin Only)
+    Route::get('/craftsman-images', [CraftsmanImageController::class, 'index'])->name('api.craftsman-images.index');
+    Route::get('/craftsman-images/product-names', [CraftsmanImageController::class, 'allProductNames'])->name('api.craftsman-images.all-product-names');
+    Route::get('/craftsman-images/{craftsman}/product-names', [CraftsmanImageController::class, 'productNames'])->name('api.craftsman-images.product-names');
+    Route::get('/craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('api.craftsman-images.show');
+
     /*
     |--------------------------------------------------------------------------
     | Role-Prefixed & Common Routes (Backward-compatibility aliases)
@@ -114,6 +122,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-orders/bulk-submit', [WorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
         Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
         Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+        Route::get('/work-orders/{workOrder}/image', [WorkOrderController::class, 'serveImage'])->name('work-orders.image');
         Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('work-orders.print');
         Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
         Route::post('/work-orders/{workOrder}/accept', [WorkOrderController::class, 'accept'])->name('work-orders.accept');
@@ -156,6 +165,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update-status');
         Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('craftsmen.index');
         Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('craftsmen.show');
+        Route::get('/craftsman-images', [CraftsmanImageController::class, 'index'])->name('craftsman-images.index');
+        Route::get('/craftsman-images/product-names', [CraftsmanImageController::class, 'allProductNames'])->name('craftsman-images.all-product-names');
+        Route::get('/craftsman-images/{craftsman}/product-names', [CraftsmanImageController::class, 'productNames'])->name('craftsman-images.product-names');
+        Route::get('/craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('craftsman-images.show');
     });
     Route::prefix('admin')->middleware('api.admin')->name('api.admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -171,6 +184,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/work-orders/craftsmen', [WorkOrderController::class, 'craftsmenFilter'])->name('work-orders.craftsmen-filter');
         Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
         Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+        Route::get('/work-orders/{workOrder}/image', [WorkOrderController::class, 'serveImage'])->name('work-orders.image');
         Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('work-orders.print');
         Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
         Route::get('/customer-orders', [OrderController::class, 'index'])->name('customer-orders.index');
@@ -194,6 +208,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/orders/{order}/approve', [OrderController::class, 'approve'])->name('orders.approve');
         Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('craftsmen.index');
         Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('craftsmen.show');
+        Route::get('/craftsman-images', [CraftsmanImageController::class, 'index'])->name('craftsman-images.index');
+        Route::get('/craftsman-images/product-names', [CraftsmanImageController::class, 'allProductNames'])->name('craftsman-images.all-product-names');
+        Route::get('/craftsman-images/{craftsman}/product-names', [CraftsmanImageController::class, 'productNames'])->name('craftsman-images.product-names');
+        Route::get('/craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('craftsman-images.show');
     });
 
     Route::prefix('craftsman')->middleware('api.craftsman')->name('api.craftsman.')->group(function () {
@@ -211,6 +229,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-orders/bulk-submit', [WorkOrderController::class, 'bulkSubmit'])->name('work-orders.bulk-submit');
         Route::post('/work-orders/bulk-reject', [WorkOrderController::class, 'bulkReject'])->name('work-orders.bulk-reject');
         Route::post('/work-orders/bulk-print', [WorkOrderController::class, 'bulkPrint'])->name('work-orders.bulk-print');
+        Route::get('/work-orders/{workOrder}/image', [WorkOrderController::class, 'serveImage'])->name('work-orders.image');
         Route::get('/work-orders/{workOrder}/print', [WorkOrderController::class, 'print'])->name('work-orders.print');
         Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->name('work-orders.show');
         Route::post('/work-orders/{workOrder}/accept', [WorkOrderController::class, 'accept'])->name('work-orders.accept');

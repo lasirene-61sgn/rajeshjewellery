@@ -116,7 +116,9 @@
             <div>
                 <span class="block text-xs font-semibold uppercase text-slate-400 mb-2">Design Image</span>
                 <div class="relative inline-block">
-                    <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design Image" class="w-36 h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
+                    <a href="{{ asset('storage/' . $workOrder->design_image) }}" target="_blank">
+                        <img src="{{ asset('storage/' . $workOrder->design_image) }}" alt="Design Image" class="w-36 h-36 object-cover rounded-xl border border-slate-200 shadow-sm hover:opacity-90 transition-opacity">
+                    </a>
                     @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
                         <span class="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-black px-2 py-0.5 rounded shadow uppercase tracking-wide border border-white z-10">
                             REORDER

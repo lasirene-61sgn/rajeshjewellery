@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class WorkOrderController extends Controller
 {
@@ -435,11 +436,20 @@ class WorkOrderController extends Controller
             $query->where('order_type', 'like', "%{$q}%");
         }
 
-        $types = $query->distinct()->orderBy('order_type')->pluck('order_type')->values();
+        $types = $query->distinct()->orderBy('order_type')->pluck('order_type');
 
         if ($types->isEmpty()) {
-            $types = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+            $types = collect(['Regular', 'Custom', 'Urgent', 'Repair', 'ESO']);
+        } elseif (! $types->contains(fn ($val) => strcasecmp($val, 'ESO') === 0)) {
+            $types->push('ESO');
         }
+
+        if ($request->filled('q') || $request->filled('search')) {
+            $q = trim((string) ($request->q ?? $request->search));
+            $types = $types->filter(fn ($t) => stripos($t, $q) !== false);
+        }
+
+        $types = $types->sort()->values();
 
         return response()->json([
             'success'     => true,
@@ -600,10 +610,13 @@ class WorkOrderController extends Controller
         if ($isAdmin) {
             $designCodes = DesignCode::orderBy('code')->get(['id', 'code', 'nickname']);
             $productNames = WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values();
-            $orderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values();
+            $orderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type');
             if ($orderTypes->isEmpty()) {
-                $orderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+                $orderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair', 'ESO']);
+            } elseif (! $orderTypes->contains(fn ($val) => strcasecmp($val, 'ESO') === 0)) {
+                $orderTypes->push('ESO');
             }
+            $orderTypes = $orderTypes->sort()->values();
             $craftsmen = Craftsman::where(fn ($q) => $q->where('is_active', true)->orWhereNull('is_active'))->orderBy('name')->get(['id', 'name', 'mobile', 'email']);
             $designNicknames = DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->orderBy('nickname')->pluck('nickname')->unique()->values();
             $categories = WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values();
@@ -637,10 +650,13 @@ class WorkOrderController extends Controller
         }
 
         $productNames = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values();
-        $orderTypes = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values();
+        $orderTypes = WorkOrder::where('craftsman_id', $user->id)->whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type');
         if ($orderTypes->isEmpty()) {
-            $orderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
+            $orderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair', 'ESO']);
+        } elseif (! $orderTypes->contains(fn ($val) => strcasecmp($val, 'ESO') === 0)) {
+            $orderTypes->push('ESO');
         }
+        $orderTypes = $orderTypes->sort()->values();
 
         $designNicknames = DesignCode::whereHas('craftsmen', fn ($q) => $q->where('craftsmen.id', $user->id))
             ->whereNotNull('nickname')
@@ -1093,6 +1109,272 @@ class WorkOrderController extends Controller
     }
 
     /**
+     * Resolve public storage URL for a path or filename.
+     */
+    protected function toStorageUrl(?string $path): ?string
+    {
+        if (blank($path)) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        $clean = ltrim($path, '/');
+        if (str_starts_with($clean, 'storage/')) {
+            return url($clean);
+        }
+
+        if (str_starts_with($clean, 'public/')) {
+            return url('storage/' . substr($clean, 7));
+        }
+
+        return url('storage/' . $clean);
+    }
+
+    /**
+     * Get or generate the effective stamped design image path in public storage.
+     * Stamps "REORDER" (top) and/or "NEED 916 SEAL ONLY" (bottom) when applicable.
+     * When neither badge applies, returns original storage path.
+     */
+    protected function resolveEffectiveDesignImagePath(WorkOrder $workOrder): ?string
+    {
+        if (empty($workOrder->design_image)) {
+            return null;
+        }
+
+        $isReorder = (bool) ($workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0 || $workOrder->is_reorder);
+        // Only orders with ESO in reference_no receive the 916 seal stamp
+        $needsSeal = (bool) (stripos((string) $workOrder->reference_no, 'ESO') !== false);
+
+        // If neither badge is needed, return original relative path in public storage
+        if (! $isReorder && ! $needsSeal) {
+            return $workOrder->design_image;
+        }
+
+        // Determine real path of source image
+        $sourcePath = Storage::disk('public')->path($workOrder->design_image);
+        if (! file_exists($sourcePath)) {
+            $altPath = public_path('storage/' . ltrim($workOrder->design_image, '/'));
+            if (file_exists($altPath)) {
+                $sourcePath = $altPath;
+            } else {
+                $altPath2 = storage_path('app/' . ltrim($workOrder->design_image, '/'));
+                if (file_exists($altPath2)) {
+                    $sourcePath = $altPath2;
+                } else {
+                    return $workOrder->design_image;
+                }
+            }
+        }
+
+        $returnCount = (int) ($workOrder->return_count ?? 0);
+        $sealFlag = $needsSeal ? 1 : 0;
+        $reorderFlag = $isReorder ? 1 : 0;
+        $mtime = filemtime($sourcePath);
+
+        $cacheDir = storage_path('app/public/work_orders/stamped');
+        $cacheFilename = "wo_{$workOrder->id}_reorder{$reorderFlag}_ret{$returnCount}_seal{$sealFlag}_{$mtime}.jpg";
+        $cachePath = $cacheDir . DIRECTORY_SEPARATOR . $cacheFilename;
+        $cacheRelative = 'work_orders/stamped/' . $cacheFilename;
+
+        if (file_exists($cachePath)) {
+            return $cacheRelative;
+        }
+
+        // Generate stamped image using GD
+        if ($this->generateStampedImage($sourcePath, $cachePath, $isReorder, $needsSeal)) {
+            return $cacheRelative;
+        }
+
+        return $workOrder->design_image;
+    }
+
+    /**
+     * Generate stamped design image with "REORDER" (top) and/or "NEED 916 SEAL ONLY" (bottom).
+     */
+    protected function generateStampedImage(string $sourcePath, string $destPath, bool $isReorder, bool $needsSeal): bool
+    {
+        $raw = @file_get_contents($sourcePath);
+        if ($raw === false) {
+            return false;
+        }
+
+        $srcImg = @imagecreatefromstring($raw);
+        if (! $srcImg) {
+            return false;
+        }
+
+        $srcW = imagesx($srcImg);
+        $srcH = imagesy($srcImg);
+
+        $targetW = max(1200, $srcW);
+        $targetH = (int) round(($targetW / $srcW) * $srcH);
+
+        $canvas = imagecreatetruecolor($targetW, $targetH);
+        imagealphablending($canvas, true);
+        imagesavealpha($canvas, true);
+
+        $whiteBg = imagecolorallocate($canvas, 255, 255, 255);
+        imagefilledrectangle($canvas, 0, 0, $targetW, $targetH, $whiteBg);
+        imagecopyresampled($canvas, $srcImg, 0, 0, 0, 0, $targetW, $targetH, $srcW, $srcH);
+        imagedestroy($srcImg);
+
+        $badgeBg = imagecolorallocate($canvas, 220, 38, 38);
+        $badgeBorder = imagecolorallocate($canvas, 127, 29, 29);
+        $textColor = imagecolorallocate($canvas, 255, 255, 255);
+
+        $fontPath = null;
+        $candidateFonts = [
+            'C:/Windows/Fonts/arialbd.ttf',
+            'C:/Windows/Fonts/arial.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+            '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+        ];
+        foreach ($candidateFonts as $f) {
+            if (file_exists($f)) {
+                $fontPath = $f;
+                break;
+            }
+        }
+
+        // 1. Stamp REORDER at Top Center
+        if ($isReorder) {
+            $text = 'REORDER';
+            if ($fontPath && function_exists('imagettftext')) {
+                $fontSize = (int) round($targetW * 0.032);
+                $bbox = imagettfbbox($fontSize, 0, $fontPath, $text);
+                $textW = abs($bbox[4] - $bbox[0]);
+                $textH = abs($bbox[5] - $bbox[1]);
+                $padX = (int) round($fontSize * 1.0);
+                $padY = (int) round($fontSize * 0.45);
+                $badgeW = $textW + ($padX * 2);
+                $badgeH = $textH + ($padY * 2);
+                $badgeX = (int) round(($targetW - $badgeW) / 2);
+                $badgeY = (int) round($targetH * 0.035);
+
+                imagefilledrectangle($canvas, $badgeX - 4, $badgeY - 4, $badgeX + $badgeW + 4, $badgeY + $badgeH + 4, $badgeBorder);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagettftext($canvas, $fontSize, 0, $badgeX + $padX, $badgeY + $padY + $textH, $textColor, $fontPath, $text);
+            } else {
+                $font = 5;
+                $fw = imagefontwidth($font);
+                $fh = imagefontheight($font);
+                $textW = strlen($text) * $fw;
+                $pad = 12;
+                $badgeW = $textW + ($pad * 2);
+                $badgeH = $fh + ($pad * 2);
+                $badgeX = (int) round(($targetW - $badgeW) / 2);
+                $badgeY = (int) round($targetH * 0.035);
+
+                imagefilledrectangle($canvas, $badgeX - 2, $badgeY - 2, $badgeX + $badgeW + 2, $badgeY + $badgeH + 2, $badgeBorder);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagestring($canvas, $font, $badgeX + $pad, $badgeY + $pad, $text, $textColor);
+            }
+        }
+
+        // 2. Stamp NEED 916 SEAL ONLY at Bottom Center
+        if ($needsSeal) {
+            $text = 'NEED 916 SEAL ONLY';
+            if ($fontPath && function_exists('imagettftext')) {
+                $fontSize = (int) round($targetW * 0.028);
+                $bbox = imagettfbbox($fontSize, 0, $fontPath, $text);
+                $textW = abs($bbox[4] - $bbox[0]);
+                $textH = abs($bbox[5] - $bbox[1]);
+                $padX = (int) round($fontSize * 1.0);
+                $padY = (int) round($fontSize * 0.45);
+                $badgeW = $textW + ($padX * 2);
+                $badgeH = $textH + ($padY * 2);
+                $badgeX = (int) round(($targetW - $badgeW) / 2);
+                $badgeY = (int) round($targetH - $badgeH - ($targetH * 0.035));
+
+                imagefilledrectangle($canvas, $badgeX - 4, $badgeY - 4, $badgeX + $badgeW + 4, $badgeY + $badgeH + 4, $badgeBorder);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagettftext($canvas, $fontSize, 0, $badgeX + $padX, $badgeY + $padY + $textH, $textColor, $fontPath, $text);
+            } else {
+                $font = 5;
+                $fw = imagefontwidth($font);
+                $fh = imagefontheight($font);
+                $textW = strlen($text) * $fw;
+                $pad = 12;
+                $badgeW = $textW + ($pad * 2);
+                $badgeH = $fh + ($pad * 2);
+                $badgeX = (int) round(($targetW - $badgeW) / 2);
+                $badgeY = (int) round($targetH - $badgeH - ($targetH * 0.035));
+
+                imagefilledrectangle($canvas, $badgeX - 2, $badgeY - 2, $badgeX + $badgeW + 2, $badgeY + $badgeH + 2, $badgeBorder);
+                imagefilledrectangle($canvas, $badgeX, $badgeY, $badgeX + $badgeW, $badgeBg);
+                imagestring($canvas, $font, $badgeX + $pad, $badgeY + $pad, $text, $textColor);
+            }
+        }
+
+        $destDir = dirname($destPath);
+        if (! is_dir($destDir)) {
+            @mkdir($destDir, 0755, true);
+        }
+
+        $saved = imagejpeg($canvas, $destPath, 92);
+        imagedestroy($canvas);
+
+        return (bool) $saved;
+    }
+
+    /**
+     * Serve design image stamped with "REORDER" (top) and/or "NEED 916 SEAL ONLY" (bottom) when applicable.
+     */
+    public function serveImage(Request $request, WorkOrder $workOrder)
+    {
+        if (empty($workOrder->design_image)) {
+            abort(404, 'Design image not found.');
+        }
+
+        $effectivePath = $this->resolveEffectiveDesignImagePath($workOrder);
+        if ($effectivePath) {
+            $fullPath = storage_path('app/public/' . $effectivePath);
+            if (file_exists($fullPath)) {
+                return $this->respondWithFile($fullPath, 'image/jpeg');
+            }
+
+            $publicPath = public_path('storage/' . $effectivePath);
+            if (file_exists($publicPath)) {
+                return $this->respondWithFile($publicPath, 'image/jpeg');
+            }
+
+            $storageDiskPath = Storage::disk('public')->path($effectivePath);
+            if (file_exists($storageDiskPath)) {
+                return $this->respondWithFile($storageDiskPath, 'image/jpeg');
+            }
+        }
+
+        abort(404, 'Design image file not found on disk.');
+    }
+
+    /**
+     * Safely stream image file bytes directly to prevent Symfony BinaryFileResponse Windows permission errors.
+     */
+    protected function respondWithFile(string $path, ?string $mime = null)
+    {
+        if (! file_exists($path)) {
+            abort(404, 'File not found on disk.');
+        }
+
+        $content = @file_get_contents($path);
+        if ($content === false) {
+            abort(500, 'Unable to read file content.');
+        }
+
+        $contentType = $mime ?? (@mime_content_type($path) ?: 'image/jpeg');
+
+        return response($content, 200, [
+            'Content-Type'   => $contentType,
+            'Content-Length' => strlen($content),
+            'Cache-Control'  => 'public, max-age=86400',
+        ]);
+    }
+
+    /**
      * Resolve and normalize tab parameter from request (supports tab, tabs, status).
      */
     protected function resolveTab(Request $request, string $default): string
@@ -1110,12 +1392,36 @@ class WorkOrderController extends Controller
     }
 
     /**
-     * Resolve per-page limit supporting per_page, limit, and perPage with bounds check.
+     * Resolve per-page limit supporting per_page, limit, perPage, pageSize, per-page, rowsPerPage, take with bounds check.
      */
     protected function resolvePerPage(Request $request, int $default = 15, int $max = 100): int
     {
-        $val = $request->input('per_page') ?? $request->input('limit') ?? $request->input('perPage') ?? $default;
+        $val = $request->input('per_page')
+            ?? $request->input('limit')
+            ?? $request->input('perPage')
+            ?? $request->input('pageSize')
+            ?? $request->input('per-page')
+            ?? $request->input('rowsPerPage')
+            ?? $request->input('take')
+            ?? $default;
+
         return min(max((int) $val, 1), $max);
+    }
+
+    /**
+     * Resolve current page supporting page, current_page, currentPage, page_no, pageNumber, p.
+     */
+    protected function resolvePage(Request $request, int $default = 1): int
+    {
+        $val = $request->input('page')
+            ?? $request->input('current_page')
+            ?? $request->input('currentPage')
+            ?? $request->input('page_no')
+            ?? $request->input('pageNumber')
+            ?? $request->input('p')
+            ?? $default;
+
+        return max((int) $val, 1);
     }
 
     /**
@@ -1332,12 +1638,7 @@ class WorkOrderController extends Controller
 
         $orderTypeInput = $request->input('order_type');
         if (! empty($orderTypeInput)) {
-            $types = is_array($orderTypeInput)
-                ? $orderTypeInput
-                : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
-            if (! empty($types)) {
-                $query->whereIn('order_type', $types);
-            }
+            $this->applyOrderTypeFilter($query, $orderTypeInput);
         }
 
         if ($request->filled('nickname')) {
@@ -1403,31 +1704,46 @@ class WorkOrderController extends Controller
             default               => null,
         };
 
+        $page = $this->resolvePage($request, 1);
         $perPage = $this->resolvePerPage($request, 15);
-        $paginator = $query->latest('id')->paginate($perPage)->withQueryString();
+        $paginator = $query->latest('id')->paginate($perPage, ['*'], 'page', $page)->withQueryString();
 
         $items = $paginator->getCollection()->map(fn (WorkOrder $order) => $this->transformWorkOrder($order, $request->user()));
         $pagination = $this->formatPagination($paginator);
 
         $searchTokens = $this->extractSearchTokens($request);
 
+        $adminOrderTypes = WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type');
+        if ($adminOrderTypes->isEmpty()) {
+            $adminOrderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair', 'ESO']);
+        } elseif (! $adminOrderTypes->contains(fn ($val) => strcasecmp($val, 'ESO') === 0)) {
+            $adminOrderTypes->push('ESO');
+        }
+        $adminOrderTypes = $adminOrderTypes->sort()->values();
+
         $filterOptions = [
             'design_codes'     => DesignCode::orderBy('code')->pluck('code')->values(),
             'product_names'    => WorkOrder::whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values(),
-            'order_types'      => WorkOrder::whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values(),
+            'order_types'      => $adminOrderTypes,
             'craftsmen'        => Craftsman::where(fn ($q) => $q->where('is_active', true)->orWhereNull('is_active'))->orderBy('name')->get(['id', 'name', 'mobile']),
             'design_nicknames' => DesignCode::whereNotNull('nickname')->where('nickname', '!=', '')->orderBy('nickname')->pluck('nickname')->unique()->values(),
             'categories'       => WorkOrder::whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values(),
             'subcategories'    => WorkOrder::whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->orderBy('subcategory')->pluck('subcategory')->values(),
         ];
-        if ($filterOptions['order_types']->isEmpty()) {
-            $filterOptions['order_types'] = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
-        }
 
         return response()->json([
-            'success' => true,
-            'role'    => 'admin',
-            'data'    => array_merge([
+            'success'        => true,
+            'role'           => 'admin',
+            'pagination'     => $pagination,
+            'meta'           => $pagination,
+            'current_page'   => $pagination['current_page'],
+            'last_page'      => $pagination['last_page'],
+            'per_page'       => $pagination['per_page'],
+            'total'          => $pagination['total'],
+            'from'           => $pagination['from'],
+            'to'             => $pagination['to'],
+            'has_more_pages' => $pagination['has_more_pages'],
+            'data'           => array_merge([
                 'current_tab'        => $currentTab,
                 'counts'             => $counts,
                 'tabs'               => $tabs,
@@ -1437,6 +1753,8 @@ class WorkOrderController extends Controller
                 'filters'            => $filterOptions,
                 'items'              => $items,
                 'data'               => $items,
+                'pagination'         => $pagination,
+                'meta'               => $pagination,
             ], $pagination),
         ]);
     }
@@ -1480,12 +1798,7 @@ class WorkOrderController extends Controller
 
         $orderTypeInput = $request->input('order_type');
         if (! empty($orderTypeInput)) {
-            $types = is_array($orderTypeInput)
-                ? $orderTypeInput
-                : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
-            if (! empty($types)) {
-                $query->whereIn('order_type', $types);
-            }
+            $this->applyOrderTypeFilter($query, $orderTypeInput);
         }
 
         if ($request->filled('nickname')) {
@@ -1548,25 +1861,31 @@ class WorkOrderController extends Controller
             default               => null,
         };
 
+        $page = $this->resolvePage($request, 1);
         $perPage = $this->resolvePerPage($request, 15);
-        $paginator = $query->latest('id')->paginate($perPage)->withQueryString();
+        $paginator = $query->latest('id')->paginate($perPage, ['*'], 'page', $page)->withQueryString();
 
         $items = $paginator->getCollection()->map(fn (WorkOrder $order) => $this->transformWorkOrder($order, $craftsman));
         $pagination = $this->formatPagination($paginator);
 
         $searchTokens = $this->extractSearchTokens($request);
 
+        $craftsmanOrderTypes = WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type');
+        if ($craftsmanOrderTypes->isEmpty()) {
+            $craftsmanOrderTypes = collect(['Regular', 'Custom', 'Urgent', 'Repair', 'ESO']);
+        } elseif (! $craftsmanOrderTypes->contains(fn ($val) => strcasecmp($val, 'ESO') === 0)) {
+            $craftsmanOrderTypes->push('ESO');
+        }
+        $craftsmanOrderTypes = $craftsmanOrderTypes->sort()->values();
+
         $craftsmanFilterOptions = [
             'design_codes'     => $craftsman->designCodes()->orderBy('code')->pluck('code')->values(),
             'product_names'    => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('product_name')->where('product_name', '!=', '')->distinct()->orderBy('product_name')->pluck('product_name')->values(),
-            'order_types'      => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('order_type')->where('order_type', '!=', '')->distinct()->orderBy('order_type')->pluck('order_type')->values(),
+            'order_types'      => $craftsmanOrderTypes,
             'design_nicknames' => DesignCode::whereHas('craftsmen', fn ($q) => $q->where('craftsmen.id', $craftsman->id))->whereNotNull('nickname')->where('nickname', '!=', '')->pluck('nickname')->unique()->values(),
             'categories'       => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('category')->where('category', '!=', '')->distinct()->orderBy('category')->pluck('category')->values(),
             'subcategories'    => WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('subcategory')->where('subcategory', '!=', '')->distinct()->orderBy('subcategory')->pluck('subcategory')->values(),
         ];
-        if ($craftsmanFilterOptions['order_types']->isEmpty()) {
-            $craftsmanFilterOptions['order_types'] = collect(['Regular', 'Custom', 'Urgent', 'Repair']);
-        }
         if ($craftsmanFilterOptions['design_codes']->isEmpty()) {
             $craftsmanFilterOptions['design_codes'] = WorkOrder::where('craftsman_id', $craftsman->id)->whereNotNull('design_code')->where('design_code', '!=', '')->distinct()->orderBy('design_code')->pluck('design_code')->values();
         }
@@ -1575,9 +1894,18 @@ class WorkOrderController extends Controller
         }
 
         return response()->json([
-            'success' => true,
-            'role'    => 'craftsman',
-            'data'    => array_merge([
+            'success'        => true,
+            'role'           => 'craftsman',
+            'pagination'     => $pagination,
+            'meta'           => $pagination,
+            'current_page'   => $pagination['current_page'],
+            'last_page'      => $pagination['last_page'],
+            'per_page'       => $pagination['per_page'],
+            'total'          => $pagination['total'],
+            'from'           => $pagination['from'],
+            'to'             => $pagination['to'],
+            'has_more_pages' => $pagination['has_more_pages'],
+            'data'           => array_merge([
                 'current_tab'        => $currentTab,
                 'counts'             => $counts,
                 'tabs'               => $tabs,
@@ -1587,6 +1915,8 @@ class WorkOrderController extends Controller
                 'filters'            => $craftsmanFilterOptions,
                 'items'              => $items,
                 'data'               => $items,
+                'pagination'         => $pagination,
+                'meta'               => $pagination,
             ], $pagination),
         ]);
     }
@@ -1603,6 +1933,14 @@ class WorkOrderController extends Controller
         );
 
         $isReturned = ($order->status === 'returned' || ($order->return_count ?? 0) > 0);
+        $isReorder = $isReturned || (bool) $order->is_reorder;
+        $hasEso = stripos((string) $order->reference_no, 'ESO') !== false;
+        // Image and work order 916 seal is present only if ESO is in reference number
+        $needsSeal = $hasEso;
+
+        $rawDesignImageUrl = $this->toStorageUrl($order->design_image);
+        $effectiveDesignImagePath = $this->resolveEffectiveDesignImagePath($order);
+        $effectiveImageUrl = $this->toStorageUrl($effectiveDesignImagePath);
 
         return [
             'id'                  => $order->id,
@@ -1623,13 +1961,18 @@ class WorkOrderController extends Controller
             'unit_type'           => $order->unit_type ?? 'PCS',
             'hallmark_purity'     => $order->hallmark_purity,
             'target_weight'       => (float) $order->target_weight,
-            'seal'                => $order->seal ?? (stripos((string) $order->reference_no, 'ESO') !== false ? '916' : null),
-            'has_seal'            => (bool) ($order->has_seal || stripos((string) $order->reference_no, 'ESO') !== false || !empty($order->seal)),
+            'seal'                => $order->seal ?? ($hasEso ? '916' : null),
+            'has_seal'            => $hasEso || ! empty($order->seal),
+            'need_916_seal'       => $needsSeal,
+            'seal_text'           => $needsSeal ? 'NEED 916 SEAL ONLY' : null,
             'job_type'            => $order->job_type,
             'order_type'          => $order->order_type,
             'status'              => $order->status,
             'is_partially_completed' => ($order->status === 'partially_completed' || ($order->completed_quantity ?? 0) > 0),
             'is_returned'         => $isReturned,
+            'is_reorder'          => $isReorder,
+            'reorder'             => $isReorder,
+            'reorder_text'        => $isReorder ? 'REORDER' : null,
             'display_status'      => $isReturned ? 'Returned' : ucfirst(str_replace('_', ' ', $order->status)),
             'is_overdue'          => $isOverdue,
             'due_date'            => $order->due_date?->format('Y-m-d'),
@@ -1639,8 +1982,11 @@ class WorkOrderController extends Controller
             'return_count'        => (int) ($order->return_count ?? 0),
             'return_reason'       => $order->return_reason,
             'reject_reason'       => $order->reject_reason,
-            'design_image_url'    => $order->design_image ? url('storage/' . $order->design_image) : null,
-            'return_image_url'    => $order->return_image ? url('storage/' . $order->return_image) : null,
+            'design_image_url'    => $effectiveImageUrl,
+            'raw_design_image_url'=> $rawDesignImageUrl,
+            'image_url'           => $effectiveImageUrl,
+            'stamped_image_url'   => $effectiveImageUrl,
+            'return_image_url'    => $this->toStorageUrl($order->return_image),
             'print_url'           => url('/api/work-orders/' . $order->id . '/print'),
             'craftsman'           => $order->craftsman ? [
                 'id'     => $order->craftsman->id,
@@ -1707,12 +2053,7 @@ class WorkOrderController extends Controller
             }
             $orderTypeInput = $request->input('order_type');
             if (! empty($orderTypeInput)) {
-                $types = is_array($orderTypeInput)
-                    ? $orderTypeInput
-                    : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
-                if (! empty($types)) {
-                    $baseQuery->whereIn('order_type', $types);
-                }
+                $this->applyOrderTypeFilter($baseQuery, $orderTypeInput);
             }
             $fromDate = $request->input('from_date') ?? $request->input('date_from');
             if (! blank($fromDate)) {
@@ -1871,12 +2212,7 @@ class WorkOrderController extends Controller
             }
             $orderTypeInput = $request->input('order_type');
             if (! empty($orderTypeInput)) {
-                $types = is_array($orderTypeInput)
-                    ? $orderTypeInput
-                    : array_filter(array_map('trim', explode(',', (string) $orderTypeInput)));
-                if (! empty($types)) {
-                    $baseQuery->whereIn('order_type', $types);
-                }
+                $this->applyOrderTypeFilter($baseQuery, $orderTypeInput);
             }
             if ($request->filled('nickname')) {
                 $nickname = trim($request->nickname);
@@ -2001,6 +2337,54 @@ class WorkOrderController extends Controller
             'counts' => $counts,
             'tabs'   => $tabs,
         ];
+    }
+
+    /**
+     * Apply order type filter (supports multiple selection and special 'ESO' reference matching).
+     */
+    protected function applyOrderTypeFilter(mixed $query, mixed $orderTypes): void
+    {
+        if (empty($orderTypes)) {
+            return;
+        }
+
+        if (is_string($orderTypes)) {
+            $orderTypes = array_values(array_filter(array_map('trim', explode(',', $orderTypes))));
+        } elseif (is_array($orderTypes)) {
+            $orderTypes = array_values(array_filter(array_map('trim', $orderTypes)));
+        } else {
+            return;
+        }
+
+        if (empty($orderTypes)) {
+            return;
+        }
+
+        $hasEso = false;
+        $otherTypes = [];
+        foreach ($orderTypes as $type) {
+            if (strcasecmp($type, 'ESO') === 0) {
+                $hasEso = true;
+            } else {
+                $otherTypes[] = $type;
+            }
+        }
+
+        $query->where(function ($q) use ($hasEso, $otherTypes) {
+            if (! empty($otherTypes)) {
+                $q->whereIn('order_type', $otherTypes);
+            }
+
+            if ($hasEso) {
+                if (! empty($otherTypes)) {
+                    $q->orWhere('order_type', 'ESO')
+                      ->orWhere('reference_no', 'like', '%ESO%');
+                } else {
+                    $q->where('order_type', 'ESO')
+                      ->orWhere('reference_no', 'like', '%ESO%');
+                }
+            }
+        });
     }
 }
 

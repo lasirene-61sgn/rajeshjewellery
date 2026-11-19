@@ -394,4 +394,278 @@ class ApiEndpointsTest extends TestCase
         $this->assertEquals('rejected', $order1->fresh()->status);
         $this->assertEquals('Design cancelled by manager', $order1->fresh()->reject_reason);
     }
+
+    public function test_admin_can_access_craftsman_images_api(): void
+    {
+        $admin = Admin::create([
+            'name'      => 'Admin Images Test',
+            'email'     => 'admin_img_api_' . uniqid() . '@example.com',
+            'password'  => Hash::make('password123'),
+            'is_active' => true,
+        ]);
+
+        $token = $admin->createToken('admin_test')->plainTextToken;
+
+        $craftsman = Craftsman::create([
+            'name'      => 'Artisan Gallery ' . uniqid(),
+            'email'     => 'artisan_gallery_' . uniqid() . '@example.com',
+            'mobile'    => '91' . rand(10000000, 99999999),
+            'password'  => Hash::make('pass123'),
+            'is_active' => true,
+        ]);
+
+        $design1 = \App\Models\DesignCode::create([
+            'code'     => 'API-DC-1-' . rand(100, 999),
+            'nickname' => 'Gold Ring',
+            'image'    => 'design_codes/test1.jpg',
+        ]);
+
+        $design2 = \App\Models\DesignCode::create([
+            'code'     => 'API-DC-2-' . rand(100, 999),
+            'nickname' => 'Silver Ring',
+            'image'    => null,
+        ]);
+
+        $craftsman->designCodes()->attach([$design1->id, $design2->id]);
+
+        // 1. Index endpoint
+        $resIndex = $this->withToken($token)->getJson('/api/craftsman-images?perPage=5');
+        $resIndex->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('role', 'admin')
+            ->assertJsonStructure([
+                'data' => [
+                    'stats' => ['total_craftsmen', 'total_design_codes', 'total_images'],
+                    'items',
+                    'pagination' => ['current_page', 'last_page', 'per_page', 'total'],
+                ],
+            ]);
+
+        // 2. Show endpoint
+        $resShow = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?perPage=10");
+        $resShow->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('role', 'admin')
+            ->assertJsonPath('data.craftsman.id', $craftsman->id)
+            ->assertJsonPath('data.stats.total', 2)
+            ->assertJsonPath('data.stats.with_images', 1)
+            ->assertJsonPath('data.stats.without_images', 1)
+            ->assertJsonStructure([
+                'data' => [
+                    'craftsman' => ['id', 'name', 'email', 'mobile', 'is_active'],
+                    'stats'     => ['total', 'with_images', 'without_images'],
+                    'items',
+                    'pagination',
+                ],
+            ]);
+
+        // 3. Filter with_image
+        $resFilterWith = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?filter=with_image");
+        $resFilterWith->assertOk();
+        $this->assertCount(1, $resFilterWith->json('data.items'));
+        $this->assertEquals($design1->code, $resFilterWith->json('data.items.0.code'));
+
+        // 4. Filter without_image
+        $resFilterWithout = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?filter=without_image");
+        $resFilterWithout->assertOk();
+        $this->assertCount(1, $resFilterWithout->json('data.items'));
+        $this->assertEquals($design2->code, $resFilterWithout->json('data.items.0.code'));
+
+        // 5. Test product_name filter and response attributes
+        WorkOrder::create([
+            'work_order_no' => 'WO-IMG-TEST-' . rand(100, 999),
+            'reference_no'  => 'REF-IMG-1',
+            'product_name'  => 'Special Choker',
+            'design_code'   => $design1->code,
+            'craftsman_id'  => $craftsman->id,
+            'quantity'      => 1,
+            'target_weight' => 12.5,
+        ]);
+
+        $resFilterProduct = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?product_name=Special+Choker");
+        $resFilterProduct->assertOk();
+        $this->assertCount(1, $resFilterProduct->json('data.items'));
+        $this->assertEquals($design1->code, $resFilterProduct->json('data.items.0.code'));
+        $this->assertEquals('Special Choker', $resFilterProduct->json('data.items.0.product_name'));
+        $this->assertContains('Special Choker', $resFilterProduct->json('data.product_names'));
+
+        // 6. Test filters=product_names returns only product names list
+        $resOnlyProducts = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?filters=product_names");
+        $resOnlyProducts->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filter', 'product_names');
+        $this->assertContains('Special Choker', $resOnlyProducts->json('product_names'));
+        $this->assertNull($resOnlyProducts->json('data.items'));
+
+        // 7. Test dedicated craftsman product-names endpoint
+        $resDedicated = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}/product-names");
+        $resDedicated->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filter', 'product_names');
+        $this->assertContains('Special Choker', $resDedicated->json('product_names'));
+    }
+
+    public function test_craftsman_is_forbidden_from_craftsman_images_api(): void
+    {
+        $craftsman = Craftsman::create([
+            'name'      => 'Artisan Blocked',
+            'email'     => 'blocked_' . uniqid() . '@example.com',
+            'mobile'    => '92' . rand(10000000, 99999999),
+            'password'  => Hash::make('pass123'),
+            'is_active' => true,
+        ]);
+
+        $token = $craftsman->createToken('craftsman_test')->plainTextToken;
+
+        // Craftsman cannot access index
+        $resIndex = $this->withToken($token)->getJson('/api/craftsman-images');
+        $resIndex->assertStatus(403)
+            ->assertJsonPath('success', false);
+
+        // Craftsman cannot access show
+        $resShow = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}");
+        $resShow->assertStatus(403)
+            ->assertJsonPath('success', false);
+    }
+
+    public function test_work_order_api_pagination_and_stamp_attributes(): void
+    {
+        $admin = Admin::create([
+            'name'      => 'Admin WO Test',
+            'email'     => 'admin_wo_test_' . uniqid() . '@example.com',
+            'password'  => Hash::make('password123'),
+            'is_active' => true,
+        ]);
+
+        $token = $admin->createToken('admin_wo')->plainTextToken;
+
+        // Create 2 test work orders: one with ESO seal and returned status
+        $wo1 = WorkOrder::create([
+            'work_order_no' => 'WO-TEST-PAG-1',
+            'reference_no'  => 'ESO-999-A',
+            'product_name'  => 'Gold Chain ESO',
+            'design_code'   => 'DC-ESO-01',
+            'quantity'      => 5,
+            'target_weight' => 2.500,
+            'status'        => 'returned',
+            'return_count'  => 1,
+            'return_reason' => 'Fix Polish',
+            'return_due_date' => now()->addDays(2)->toDateString(),
+        ]);
+
+        $wo2 = WorkOrder::create([
+            'work_order_no' => 'WO-TEST-PAG-2',
+            'reference_no'  => 'REG-888-B',
+            'product_name'  => 'Silver Ring',
+            'design_code'   => 'DC-REG-02',
+            'quantity'      => 3,
+            'target_weight' => 1.200,
+            'status'        => 'allocated',
+        ]);
+
+        // 1. Test pagination with limit and page
+        $res = $this->withToken($token)->getJson('/api/work-orders?limit=1&page=1');
+        $res->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('per_page', 1)
+            ->assertJsonPath('current_page', 1)
+            ->assertJsonStructure([
+                'pagination' => ['current_page', 'last_page', 'per_page', 'total'],
+                'meta'       => ['current_page', 'last_page', 'per_page', 'total'],
+                'data'       => [
+                    'items',
+                    'pagination',
+                    'meta',
+                ],
+            ]);
+
+        // 2. Test pagination with current_page and per_page query params
+        $res2 = $this->withToken($token)->getJson('/api/work-orders?per_page=1&current_page=2');
+        $res2->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('per_page', 1)
+            ->assertJsonPath('current_page', 2);
+
+        // 3. Test transformWorkOrder has seal and reorder badges
+        $resSingle = $this->withToken($token)->getJson("/api/work-orders/{$wo1->id}");
+        $resSingle->assertOk()
+            ->assertJsonPath('data.has_seal', true)
+            ->assertJsonPath('data.need_916_seal', true)
+            ->assertJsonPath('data.seal_text', 'NEED 916 SEAL ONLY')
+            ->assertJsonPath('data.is_reorder', true)
+            ->assertJsonPath('data.reorder', true)
+            ->assertJsonPath('data.reorder_text', 'REORDER');
+
+        // 4. Test order with design_image returns proper storage/ URL (not api/work-orders/... path)
+        $wo1->update(['design_image' => 'design_codes/test_badge.jpg']);
+        $resWithImg = $this->withToken($token)->getJson("/api/work-orders/{$wo1->id}");
+        $resWithImg->assertOk();
+        $designUrl = (string) $resWithImg->json('data.design_image_url');
+        $this->assertStringContainsString('/storage/', $designUrl);
+        $this->assertStringNotContainsString('/api/work-orders/', $designUrl);
+    }
+
+    public function test_work_orders_order_types_includes_eso_and_filters_reference_eso(): void
+    {
+        $admin = Admin::create([
+            'name'      => 'Admin ESO Test',
+            'email'     => 'admin_eso_' . uniqid() . '@example.com',
+            'password'  => Hash::make('secret123'),
+            'is_active' => true,
+        ]);
+        $token = $admin->createToken('admin-eso-test')->plainTextToken;
+
+        // 1. Check dedicated order-types endpoint includes ESO
+        $resTypes = $this->withToken($token)->getJson('/api/work-orders/order-types');
+        $resTypes->assertOk()
+            ->assertJsonPath('success', true);
+        $orderTypes = $resTypes->json('order_types') ?? $resTypes->json('data') ?? [];
+        $this->assertTrue(collect($orderTypes)->contains(fn ($val) => strcasecmp($val, 'ESO') === 0));
+
+        // 2. Create sample work orders: one with ESO in reference_no, one regular
+        $uniqueEsoRef = 'ESO-UNIT-' . uniqid();
+        $uniqueRegRef = 'REG-UNIT-' . uniqid();
+
+        $woEso = WorkOrder::create([
+            'work_order_no'  => 'WO-ESO-' . rand(1000, 9999),
+            'reference_no'   => $uniqueEsoRef,
+            'product_name'   => 'Gold ESO Pendant',
+            'design_code'    => 'DC-ESO-TEST',
+            'quantity'       => 1,
+            'target_weight'  => 3.200,
+            'unit_type'      => 'pcs',
+            'status'         => 'pending',
+            'order_type'     => null,
+        ]);
+
+        $woReg = WorkOrder::create([
+            'work_order_no'  => 'WO-REG-' . rand(1000, 9999),
+            'reference_no'   => $uniqueRegRef,
+            'product_name'   => 'Regular Ring',
+            'design_code'    => 'DC-REG-TEST',
+            'quantity'       => 1,
+            'target_weight'  => 1.500,
+            'unit_type'      => 'pcs',
+            'status'         => 'pending',
+            'order_type'     => 'Regular',
+        ]);
+
+        // 3. Filter by order_type=ESO in API
+        $resFilter = $this->withToken($token)->getJson('/api/work-orders?order_type=ESO&per_page=100');
+        $resFilter->assertOk();
+        $items = collect($resFilter->json('data.items') ?? $resFilter->json('data') ?? []);
+        $matchedEso = $items->firstWhere('reference_no', $uniqueEsoRef);
+        $matchedReg = $items->firstWhere('reference_no', $uniqueRegRef);
+
+        $this->assertNotNull($matchedEso, 'Work order with ESO in reference_no must be included when filtering by order_type=ESO');
+        $this->assertNull($matchedReg, 'Regular work order without ESO must not be included when filtering by order_type=ESO');
+
+        // 4. Test unauthenticated image route is publicly accessible (does not return 401)
+        $publicImgRes = $this->get('/api/work-orders/351/image');
+        $this->assertNotEquals(401, $publicImgRes->getStatusCode(), 'Image route must be publicly accessible without requiring sanctum auth token');
+
+        // 5. Test admin web view with order_type=ESO
+        $webRes = $this->actingAs($admin, 'admin')->get(route('admin.work_orders.index', ['order_type' => 'ESO']));
+        $webRes->assertOk();
+    }
 }

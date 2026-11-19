@@ -63,6 +63,7 @@ Route::middleware(['web', 'auth:admin'])->prefix('admin')->name('admin.')->group
 
     // Explicit craftsman resource routes
     Route::get('work-orders/{workOrder}/print', [AdminWorkOrderController::class, 'print'])->name('work_orders.print');
+    Route::get('work-orders/{workOrder}/image', [\App\Http\Controllers\Api\WorkOrderController::class, 'serveImage'])->name('work_orders.image');
     Route::post('work-orders/{workOrder}/allocate', [AdminWorkOrderController::class, 'allocate'])->name('work_orders.allocate');
     Route::post('work-orders/{workOrder}/reallocate', [AdminWorkOrderController::class, 'reallocate'])->name('work_orders.reallocate');
     Route::post('work-orders/{workOrder}/reject', [AdminWorkOrderController::class, 'reject'])->name('work_orders.reject');
@@ -101,6 +102,7 @@ Route::prefix('craftsman')->name('craftsman.')->middleware(['web', 'auth:craftsm
     Route::get('work-orders', [CraftsmanWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('work-orders/{workOrder}', [CraftsmanWorkOrderController::class, 'show'])->name('work-orders.show');
     Route::get('work-orders/{workOrder}/print', [CraftsmanWorkOrderController::class, 'print'])->name('work-orders.print');
+    Route::get('work-orders/{workOrder}/image', [\App\Http\Controllers\Api\WorkOrderController::class, 'serveImage'])->name('work-orders.image');
     Route::post('work-orders/{workOrder}/accept', [CraftsmanWorkOrderController::class, 'accept'])->name('work-orders.accept');
     Route::post('work-orders/{workOrder}/reject', [CraftsmanWorkOrderController::class, 'reject'])->name('work-orders.reject');
     Route::post('work-orders/{workOrder}/submit', [CraftsmanWorkOrderController::class, 'submitForApproval'])->name('work-orders.submit');

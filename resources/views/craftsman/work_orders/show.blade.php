@@ -3,228 +3,276 @@
 @section('title', 'Order ' . $workOrder->work_order_no)
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-6 px-4 sm:px-0" x-data="{ rejectModal: false }">
+    <div class="max-w-4xl mx-auto space-y-6 px-4 sm:px-0" x-data="{ rejectModal: false }">
 
-    <!-- Header Section -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <div class="flex flex-wrap items-center gap-2">
-                <h1 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">{{ $workOrder->reference_no }}</h1>
-                @if($workOrder->has_seal || stripos((string)$workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
-                    <span class="px-2 py-0.5 bg-amber-500 text-white rounded text-xs font-black uppercase tracking-wider shadow-sm">
-                        916 SEAL
-                    </span>
-                @endif
-                @if($workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
-                    <span class="px-2.5 py-0.5 text-xs uppercase tracking-wide bg-rose-600 text-white font-extrabold rounded-lg shadow-sm">
-                        Returned @if($workOrder->return_count > 1)(x{{ $workOrder->return_count }})@endif
-                    </span>
-                @endif
-            </div>
-            <p class="text-xs text-stone-500 mt-0.5">Work Order Specifications & Details</p>
-        </div>
-        <div class="flex items-center gap-2.5 w-full sm:w-auto">
-            @if($workOrder->status === 'allocated')
-                <form method="POST" action="{{ route('craftsman.work-orders.accept', $workOrder) }}" class="flex-1 sm:flex-none">
-                    @csrf
-                    <button type="submit" class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
-                        <span>Accept Order</span>
-                    </button>
-                </form>
-                <button type="button" @click="rejectModal = true" class="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
-                    <span>Reject Order</span>
-                </button>
-            @endif
-            @if(in_array($workOrder->status, ['in_process', 'returned', 'partially_completed']))
-                <form method="POST" action="{{ route('craftsman.work-orders.submit', $workOrder) }}" onsubmit="return confirm('Submit this piece for quality approval?')" class="flex-1 sm:flex-none">
-                    @csrf
-                    <button type="submit" class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2">
-                        <span>Submit for Approval</span>
-                        <span>&rarr;</span>
-                    </button>
-                </form>
-            @endif
-            <a href="{{ route('craftsman.work-orders.print', $workOrder) }}" target="_blank" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 text-center">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                <span>Print Slip</span>
-            </a>
-            <a href="{{ $backUrl }}" class="px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 shadow-sm transition-all text-center">Back</a>
-        </div>
-    </div>
-
-    @if($workOrder->status === 'rejected')
-        <div class="p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 shadow-sm">
-            <div class="flex items-center gap-2 text-rose-700 font-bold text-sm">
-                <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
-                Order Rejected by You
-            </div>
-            <p class="text-sm text-rose-900 bg-white/70 p-3 rounded-xl border border-rose-200">
-                <strong>Reason for Rejection:</strong> {{ $workOrder->reject_reason ?? 'No reason specified.' }}
-            </p>
-        </div>
-    @endif
-
-    <!-- QC Return Alert if returned -->
-    @if($workOrder->status === 'returned')
-        <div class="p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-2xl space-y-3 shadow-sm">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span class="text-xs font-black uppercase text-rose-700 tracking-wider flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
-                    Quality Rejection Notice (Rework #{{ $workOrder->return_count }})
-                </span>
-                <span class="text-xs font-extrabold text-rose-700 bg-rose-100/80 px-2.5 py-1 rounded-lg w-fit">New Deadline: {{ $workOrder->return_due_date?->format('d M Y') }}</span>
-            </div>
-            <p class="text-sm font-semibold text-rose-900 bg-white/60 p-3 rounded-xl border border-rose-200/60">{{ $workOrder->return_reason }}</p>
-            @if($workOrder->return_image)
-                <div>
-                    <span class="text-xs font-bold text-rose-600 block mb-1.5">Defect Proof Image:</span>
-                    <img src="{{ asset('storage/' . $workOrder->return_image) }}" class="h-32 sm:h-40 rounded-xl border border-rose-300 object-cover shadow-sm">
-                </div>
-            @endif
-        </div>
-    @endif
-
-    <!-- Specifications Card -->
-    <div class="bg-white rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200/80 p-5 sm:p-8">
-        <div class="flex flex-col lg:flex-row gap-6 lg:gap-8">
-            
-            <!-- Image Column -->
-            <div class="w-full lg:w-1/3">
-                <div class="relative bg-stone-100 aspect-square lg:aspect-auto lg:h-full min-h-[260px] rounded-2xl overflow-hidden border border-stone-200 shadow-inner flex items-center justify-center">
-                    @if($workOrder->design_image)
-                        <img src="{{ asset('storage/' . $workOrder->design_image) }}" class="w-full h-full object-cover">
-                    @else
-                        <div class="text-stone-400 text-xs font-bold">No Design Image</div>
-                    @endif
-                    @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
-                        <span class="absolute top-3 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow-md uppercase tracking-wider border-2 border-white z-10 whitespace-nowrap">
-                            REORDER
-                        </span>
-                    @endif
-                    @if($workOrder->has_seal || stripos((string)$workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
-                        <span class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider">
+        <!-- Header Section -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <h1 class="text-xl sm:text-2xl font-extrabold text-stone-900 tracking-tight">
+                        {{ $workOrder->reference_no }}</h1>
+                    @if($workOrder->has_seal || stripos((string) $workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
+                        <span
+                            class="px-2 py-0.5 bg-amber-500 text-white rounded text-xs font-black uppercase tracking-wider shadow-sm">
                             916 SEAL
                         </span>
                     @endif
+                    @if($workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                        <span
+                            class="px-2.5 py-0.5 text-xs uppercase tracking-wide bg-rose-600 text-white font-extrabold rounded-lg shadow-sm">
+                            Returned @if($workOrder->return_count > 1)(x{{ $workOrder->return_count }})@endif
+                        </span>
+                    @endif
                 </div>
+                <p class="text-xs text-stone-500 mt-0.5">Work Order Specifications & Details</p>
             </div>
-
-            <!-- Details Column -->
-            <div class="w-full lg:w-2/3 flex flex-col justify-between space-y-5">
-                <div class="space-y-3">
-                    @if($workOrder->design_code)
-                    <div class="flex justify-between items-center border-b border-stone-100 pb-3">
-                        <span class="text-xs font-bold text-stone-400 uppercase tracking-wider">Design Code</span>
-                        <span class="text-sm sm:text-base font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 font-mono">{{ $workOrder->design_code }}</span>
-                    </div>
-                    @endif
-                    @if($workOrder->product_name)
-                    <div class="flex justify-between items-center border-b border-stone-100 pb-3">
-                        <span class="text-xs font-bold text-stone-400 uppercase tracking-wider">Product Name</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 text-right">{{ $workOrder->product_name ?? 'N/A' }}</span>
-                    </div>
-                    @endif
-                </div>
-
-                <!-- Stats Grid Cards -->
-                <div class="mb-2">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold font-mono">
-                        <span>S.No:</span>
-                        <span class="text-sm font-black">#{{ $workOrder->craftsman_serial_no ?? $workOrder->id }}</span>
-                    </span>
-                </div>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
-                    @if($workOrder->work_order_no)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Order No</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->work_order_no }}</span>
-                    </div>
-                    @endif
-                    @if($workOrder->reference_no)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Ref No</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->reference_no }}</span>
-                    </div>
-                    @endif
-                    @if($workOrder->target_weight)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Weight</span>
-                        <span class="text-xs sm:text-sm font-black text-amber-700 mt-0.5 block">{{ number_format($workOrder->target_weight, 3) }}g</span>
-                    </div>
-                    @endif
-                    @if($workOrder->quantity)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Total Qty</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->quantity }} {{ $workOrder->unit_type }}</span>
-                    </div>
-                    <div class="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                        <span class="text-[10px] text-emerald-600 block uppercase font-bold tracking-wider">Completed</span>
-                        <span class="text-xs sm:text-sm font-black text-emerald-800 mt-0.5 block">{{ $workOrder->completed_quantity ?? 0 }}</span>
-                    </div>
-                    <div class="bg-amber-50 p-3 rounded-2xl border border-amber-100">
-                        <span class="text-[10px] text-amber-600 block uppercase font-bold tracking-wider">Balance</span>
-                        <span class="text-xs sm:text-sm font-black text-amber-800 mt-0.5 block">{{ $workOrder->balance_quantity }}</span>
-                    </div>
-                    @endif
-                    @if($workOrder->size)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Size</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->size ?? 'N/A' }}</span>
-                    </div>
-                    @endif
-                    @if($workOrder->length)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Length</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->length ?? 'N/A' }}</span>
-                    </div>
-                    @endif
-                    @if($workOrder->due_date)
-                    <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
-                        <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Due Date</span>
-                        <span class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->due_date ? \Carbon\Carbon::parse($workOrder->due_date)->format('d M Y') : '-' }}</span>
-                    </div>
-                    @endif
-                     
-                </div>
+            <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                @if($workOrder->status === 'allocated')
+                    <form method="POST" action="{{ route('craftsman.work-orders.accept', $workOrder) }}"
+                        class="flex-1 sm:flex-none">
+                        @csrf
+                        <button type="submit"
+                            class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                            <span>Accept Order</span>
+                        </button>
+                    </form>
+                    <button type="button" @click="rejectModal = true"
+                        class="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                        <span>Reject Order</span>
+                    </button>
+                @endif
+                @if(in_array($workOrder->status, ['in_process', 'returned', 'partially_completed']))
+                    <form method="POST" action="{{ route('craftsman.work-orders.submit', $workOrder) }}"
+                        onsubmit="return confirm('Submit this piece for quality approval?')" class="flex-1 sm:flex-none">
+                        @csrf
+                        <button type="submit"
+                            class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2">
+                            <span>Submit for Approval</span>
+                            <span>&rarr;</span>
+                        </button>
+                    </form>
+                @endif
+                <a href="{{ route('craftsman.work-orders.print', $workOrder) }}" target="_blank"
+                    class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 text-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    <span>Print Slip</span>
+                </a>
+                <a href="{{ $backUrl }}"
+                    class="px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 shadow-sm transition-all text-center">Back</a>
             </div>
         </div>
 
-        @if($workOrder->instructions)
-            <div class="mt-6 pt-6 border-t border-stone-100">
-                <span class="text-xs font-bold uppercase text-stone-400 tracking-wider">Notes & Instructions</span>
-                <p class="text-xs sm:text-sm text-stone-800 mt-2 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60 leading-relaxed">{{ $workOrder->instructions }}</p>
+        @if($workOrder->status === 'rejected')
+            <div class="p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 shadow-sm">
+                <div class="flex items-center gap-2 text-rose-700 font-bold text-sm">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                    Order Rejected by You
+                </div>
+                <p class="text-sm text-rose-900 bg-white/70 p-3 rounded-xl border border-rose-200">
+                    <strong>Reason for Rejection:</strong> {{ $workOrder->reject_reason ?? 'No reason specified.' }}
+                </p>
             </div>
         @endif
-    </div>
 
-    <!-- REJECT MODAL -->
-    <div x-show="rejectModal" x-transition.opacity class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" x-cloak>
-        <div @click.away="rejectModal = false" class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
-            <form action="{{ route('craftsman.work-orders.reject', $workOrder) }}" method="POST" class="p-6 space-y-4">
-                @csrf
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-bold text-slate-900">Reject Work Order</h3>
-                    <button type="button" @click="rejectModal = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+        <!-- QC Return Alert if returned -->
+        @if($workOrder->status === 'returned')
+            <div class="p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-2xl space-y-3 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span class="text-xs font-black uppercase text-rose-700 tracking-wider flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
+                        Quality Rejection Notice (Rework #{{ $workOrder->return_count }})
+                    </span>
+                    <span class="text-xs font-extrabold text-rose-700 bg-rose-100/80 px-2.5 py-1 rounded-lg w-fit">New Deadline:
+                        {{ $workOrder->return_due_date?->format('d M Y') }}</span>
                 </div>
-                <p class="text-xs text-slate-500">
-                    Are you sure you want to reject order <span class="font-bold text-slate-800">#{{ $workOrder->reference_no ?? $workOrder->work_order_no }}</span>? Please state the reason below.
-                </p>
-                <div>
-                    <label for="reject_reason" class="block text-xs font-bold text-slate-600 uppercase mb-1">
-                        Reason for Rejection <span class="text-rose-500">*</span>
-                    </label>
-                    <textarea name="reject_reason" id="reject_reason" rows="3" required placeholder="e.g. Schedule full, cannot manufacture as specified..." class="w-full text-sm rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"></textarea>
+                <p class="text-sm font-semibold text-rose-900 bg-white/60 p-3 rounded-xl border border-rose-200/60">
+                    {{ $workOrder->return_reason }}</p>
+                @if($workOrder->return_image)
+                    <div>
+                        <span class="text-xs font-bold text-rose-600 block mb-1.5">Defect Proof Image:</span>
+                        <img src="{{ asset('storage/' . $workOrder->return_image) }}"
+                            class="h-32 sm:h-40 rounded-xl border border-rose-300 object-cover shadow-sm">
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        <!-- Specifications Card -->
+        <div class="bg-white rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200/80 p-5 sm:p-8">
+            <div class="flex flex-col lg:flex-row gap-6 lg:gap-8">
+
+                <!-- Image Column -->
+                <div class="w-full lg:w-1/3">
+                    <div
+                        class="relative bg-stone-100 aspect-square lg:aspect-auto lg:h-full min-h-[260px] rounded-2xl overflow-hidden border border-stone-200 shadow-inner flex items-center justify-center">
+                        @if($workOrder->design_image)
+                            <img src="{{ asset('storage/' . $workOrder->design_image) }}"
+                                class="w-full h-full object-cover">
+                        @else
+                            <div class="text-stone-400 text-xs font-bold">No Design Image</div>
+                        @endif
+                        @if($workOrder->is_reorder || $workOrder->status === 'returned' || ($workOrder->return_count ?? 0) > 0)
+                            <span
+                                class="absolute top-3 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-black px-3 py-1 rounded-lg shadow-md uppercase tracking-wider border-2 border-white z-10 whitespace-nowrap">
+                                REORDER
+                            </span>
+                        @endif
+                        @if($workOrder->has_seal || stripos((string) $workOrder->reference_no, 'ESO') !== false || !empty($workOrder->seal))
+                            <span
+                                class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider">
+                                916 SEAL
+                            </span>
+                        @endif
+                    </div>
                 </div>
-                <div class="flex items-center justify-end space-x-2 pt-2">
-                    <button type="button" @click="rejectModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors">
-                        Cancel
-                    </button>
-                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md transition-colors">
-                        Confirm Rejection
-                    </button>
+
+                <!-- Details Column -->
+                <div class="w-full lg:w-2/3 flex flex-col justify-between space-y-5">
+                    <div class="space-y-3">
+                        @if($workOrder->design_code)
+                            <div class="flex justify-between items-center border-b border-stone-100 pb-3">
+                                <span class="text-xs font-bold text-stone-400 uppercase tracking-wider">Design Code</span>
+                                <span
+                                    class="text-sm sm:text-base font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 font-mono">{{ $workOrder->design_code }}</span>
+                            </div>
+                        @endif
+                        @if($workOrder->product_name)
+                            <div class="flex justify-between items-center border-b border-stone-100 pb-3">
+                                <span class="text-xs font-bold text-stone-400 uppercase tracking-wider">Product Name</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 text-right">{{ $workOrder->product_name ?? 'N/A' }}</span>
+                            </div>
+                        @endif
+                    </div>
+
+                    <!-- Stats Grid Cards -->
+                    <div class="mb-2">
+                        <span
+                            class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold font-mono">
+                            <span>S.No:</span>
+                            <span class="text-sm font-black">#{{ $workOrder->craftsman_serial_no ?? $workOrder->id }}</span>
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
+                        @if($workOrder->work_order_no)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Order
+                                    No</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->work_order_no }}</span>
+                            </div>
+                        @endif
+                        @if($workOrder->reference_no)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Ref No</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->reference_no }}</span>
+                            </div>
+                        @endif
+                        @if($workOrder->target_weight)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Weight</span>
+                                <span
+                                    class="text-xs sm:text-sm font-black text-amber-700 mt-0.5 block">{{ number_format($workOrder->target_weight, 3) }}g</span>
+                            </div>
+                        @endif
+                        @if($workOrder->quantity)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Total
+                                    Qty</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->quantity }}
+                                    {{ $workOrder->unit_type }}</span>
+                            </div>
+                            <div class="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                                <span
+                                    class="text-[10px] text-emerald-600 block uppercase font-bold tracking-wider">Completed</span>
+                                <span
+                                    class="text-xs sm:text-sm font-black text-emerald-800 mt-0.5 block">{{ $workOrder->completed_quantity ?? 0 }}</span>
+                            </div>
+                            <div class="bg-amber-50 p-3 rounded-2xl border border-amber-100">
+                                <span class="text-[10px] text-amber-600 block uppercase font-bold tracking-wider">Balance</span>
+                                <span
+                                    class="text-xs sm:text-sm font-black text-amber-800 mt-0.5 block">{{ $workOrder->balance_quantity }}</span>
+                            </div>
+                        @endif
+                        @if($workOrder->size)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Size</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->size ?? 'N/A' }}</span>
+                            </div>
+                        @endif
+                        @if($workOrder->length)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Length</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->length ?? 'N/A' }}</span>
+                            </div>
+                        @endif
+                        @if($workOrder->due_date)
+                            <div class="bg-stone-50 p-3 rounded-2xl border border-stone-100 col-span-2 sm:col-span-2">
+                                <span class="text-[10px] text-stone-400 block uppercase font-bold tracking-wider">Due
+                                    Date</span>
+                                <span
+                                    class="text-xs sm:text-sm font-extrabold text-stone-800 mt-0.5 block">{{ $workOrder->due_date ? \Carbon\Carbon::parse($workOrder->due_date)->format('d M Y') : '-' }}</span>
+                            </div>
+                        @endif
+
+                    </div>
                 </div>
-            </form>
+            </div>
+
+            @if($workOrder->instructions)
+                <div class="mt-6 pt-6 border-t border-stone-100">
+                    <span class="text-xs font-bold uppercase text-stone-400 tracking-wider">Notes & Instructions</span>
+                    <p
+                        class="text-xs sm:text-sm text-stone-800 mt-2 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60 leading-relaxed">
+                        {{ $workOrder->instructions }}</p>
+                </div>
+            @endif
+        </div>
+
+        <!-- REJECT MODAL -->
+        <div x-show="rejectModal" x-transition.opacity
+            class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" x-cloak>
+            <div @click.away="rejectModal = false"
+                class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+                <form action="{{ route('craftsman.work-orders.reject', $workOrder) }}" method="POST" class="p-6 space-y-4">
+                    @csrf
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-slate-900">Reject Work Order</h3>
+                        <button type="button" @click="rejectModal = false"
+                            class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+                    </div>
+                    <p class="text-xs text-slate-500">
+                        Are you sure you want to reject order <span
+                            class="font-bold text-slate-800">#{{ $workOrder->reference_no ?? $workOrder->work_order_no }}</span>?
+                        Please state the reason below.
+                    </p>
+                    <div>
+                        <label for="reject_reason" class="block text-xs font-bold text-slate-600 uppercase mb-1">
+                            Reason for Rejection <span class="text-rose-500">*</span>
+                        </label>
+                        <textarea name="reject_reason" id="reject_reason" rows="3" required
+                            placeholder="e.g. Schedule full, cannot manufacture as specified..."
+                            class="w-full text-sm rounded-xl border border-slate-300 p-3 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"></textarea>
+                    </div>
+                    <div class="flex items-center justify-end space-x-2 pt-2">
+                        <button type="button" @click="rejectModal = false"
+                            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md transition-colors">
+                            Confirm Rejection
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 @endsection

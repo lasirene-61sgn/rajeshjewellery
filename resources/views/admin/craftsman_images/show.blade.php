@@ -64,7 +64,7 @@
 
     <!-- Stats & Filter Pills -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <a href="{{ route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'search' => request('search')]) }}"
+        <a href="{{ route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'search' => request('search'), 'product_name' => request('product_name')]) }}"
            class="p-4 rounded-xl border transition-all {{ !request('filter') ? 'bg-indigo-50/70 border-indigo-200 ring-1 ring-indigo-500/20' : 'bg-white border-slate-200 hover:border-slate-300' }}">
             <div class="flex items-center justify-between">
                 <div>
@@ -80,7 +80,7 @@
             <p class="text-xs text-slate-400 mt-2">All design codes mapped to this craftsman</p>
         </a>
 
-        <a href="{{ route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'filter' => 'with_image', 'search' => request('search')]) }}"
+        <a href="{{ route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'filter' => 'with_image', 'search' => request('search'), 'product_name' => request('product_name')]) }}"
            class="p-4 rounded-xl border transition-all {{ request('filter') === 'with_image' ? 'bg-emerald-50/70 border-emerald-200 ring-1 ring-emerald-500/20' : 'bg-white border-slate-200 hover:border-slate-300' }}">
             <div class="flex items-center justify-between">
                 <div>
@@ -96,7 +96,7 @@
             <p class="text-xs text-slate-400 mt-2">Design codes having a photo uploaded</p>
         </a>
 
-        <a href="{{ route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'filter' => 'without_image', 'search' => request('search')]) }}"
+        <a href="{{ route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'filter' => 'without_image', 'search' => request('search'), 'product_name' => request('product_name')]) }}"
            class="p-4 rounded-xl border transition-all {{ request('filter') === 'without_image' ? 'bg-amber-50/70 border-amber-200 ring-1 ring-amber-500/20' : 'bg-white border-slate-200 hover:border-slate-300' }}">
             <div class="flex items-center justify-between">
                 <div>
@@ -113,12 +113,14 @@
         </a>
     </div>
 
-    <!-- Search Bar -->
+    <!-- Search & Filter Bar -->
     <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <form method="GET" action="{{ route('admin.craftsman_images.show', $craftsman) }}" class="flex flex-col sm:flex-row items-center gap-3">
+        <form method="GET" action="{{ route('admin.craftsman_images.show', $craftsman) }}" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             @if(request('filter'))
                 <input type="hidden" name="filter" value="{{ request('filter') }}">
             @endif
+
+            <!-- Keyword Search -->
             <div class="relative flex-1 w-full">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,15 +130,31 @@
                 <input type="text"
                        name="search"
                        value="{{ request('search') }}"
-                       placeholder="Search design code or nickname in this folder..."
+                       placeholder="Search design code, nickname, or product..."
                        class="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             </div>
+
+            <!-- Product Name Dropdown Filter -->
+            <div class="w-full sm:w-60">
+                <select name="product_name"
+                        onchange="this.form.submit()"
+                        class="w-full py-2 px-3 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-slate-700">
+                    <option value="">All Product Names</option>
+                    @foreach($productNames as $pName)
+                        <option value="{{ $pName }}" {{ request('product_name') == $pName ? 'selected' : '' }}>
+                            {{ $pName }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <!-- Actions -->
             <div class="flex items-center gap-2 w-full sm:w-auto">
                 <button type="submit" class="w-full sm:w-auto px-5 py-2 bg-slate-900 hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
-                    Search
+                    Filter
                 </button>
-                @if(request()->filled('search') || request()->filled('filter'))
-                    <a href="{{ route('admin.craftsman_images.show', $craftsman) }}" class="w-full sm:w-auto text-center px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                @if(request()->filled('search') || request()->filled('filter') || request()->filled('product_name'))
+                    <a href="{{ route('admin.craftsman_images.show', $craftsman) }}" class="w-full sm:w-auto text-center px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors whitespace-nowrap">
                         Reset Filters
                     </a>
                 @endif
@@ -154,7 +172,7 @@
                         <img src="{{ Storage::url($design->image) }}"
                              alt="{{ $design->code }}"
                              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
-                             @click="openModal('{{ Storage::url($design->image) }}', '{{ addslashes($design->code) }}', '{{ addslashes($design->nickname ?? '') }}')">
+                             @click="openModal('{{ Storage::url($design->image) }}', '{{ addslashes($design->code) }}', '{{ addslashes($design->nickname ?? '') }}', '{{ addslashes($design->product_name ?? '') }}')">
                         
                         <!-- Overlay zoom button on hover -->
                         <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer pointer-events-none">
@@ -190,6 +208,11 @@
                             <span class="w-2 h-2 rounded-full bg-slate-300 shrink-0" title="Missing image"></span>
                         @endif
                     </div>
+                    @if($design->product_name)
+                        <p class="text-[11px] font-semibold text-indigo-600 truncate mt-0.5" title="{{ $design->product_name }}">
+                            {{ $design->product_name }}
+                        </p>
+                    @endif
                     @if($design->nickname)
                         <p class="text-xs text-slate-500 truncate mt-0.5" title="{{ $design->nickname }}">
                             {{ $design->nickname }}
@@ -210,7 +233,11 @@
                 </div>
                 <h3 class="text-sm font-bold text-slate-700">No Design Codes Found</h3>
                 <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                    @if(request()->filled('search'))
+                    @if(request()->filled('product_name') && request()->filled('search'))
+                        No design code matched product "{{ request('product_name') }}" and search "{{ request('search') }}".
+                    @elseif(request()->filled('product_name'))
+                        No design code matched product "{{ request('product_name') }}" for this craftsman.
+                    @elseif(request()->filled('search'))
                         No design code matched "{{ request('search') }}" in this folder.
                     @elseif(request('filter') === 'with_image')
                         This craftsman has no design codes with images uploaded yet.
@@ -220,7 +247,7 @@
                         No design codes have been assigned to this craftsman yet.
                     @endif
                 </p>
-                @if(request()->filled('search') || request()->filled('filter'))
+                @if(request()->filled('search') || request()->filled('filter') || request()->filled('product_name'))
                     <a href="{{ route('admin.craftsman_images.show', $craftsman) }}" class="inline-block mt-4 px-4 py-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">
                         Clear Filters
                     </a>
@@ -254,8 +281,13 @@
             <!-- Modal Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <div>
-                    <h3 class="text-base font-bold text-slate-900 font-mono" x-text="activeCode"></h3>
-                    <p class="text-xs text-slate-500" x-text="activeNickname ? activeNickname : 'No nickname'"></p>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-base font-bold text-slate-900 font-mono" x-text="activeCode"></h3>
+                        <template x-if="activeProduct">
+                            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" x-text="activeProduct"></span>
+                        </template>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5" x-text="activeNickname ? activeNickname : 'No nickname'"></p>
                 </div>
                 <div class="flex items-center gap-2">
                     <a :href="activeImage" target="_blank" download class="p-2 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-200 transition-colors" title="Open full size in new tab">
@@ -294,10 +326,12 @@
             activeImage: '',
             activeCode: '',
             activeNickname: '',
-            openModal(url, code, nickname) {
+            activeProduct: '',
+            openModal(url, code, nickname, product = '') {
                 this.activeImage = url;
                 this.activeCode = code;
                 this.activeNickname = nickname;
+                this.activeProduct = product;
                 this.modalOpen = true;
             },
             closeModal() {
@@ -305,6 +339,7 @@
                 this.activeImage = '';
                 this.activeCode = '';
                 this.activeNickname = '';
+                this.activeProduct = '';
             }
         }
     }
