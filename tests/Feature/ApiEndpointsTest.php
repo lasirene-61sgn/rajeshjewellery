@@ -503,6 +503,55 @@ class ApiEndpointsTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('filter', 'product_names');
         $this->assertContains('Special Choker', $resDedicated->json('product_names'));
+
+        // 8. Test nickname filter
+        $resFilterNick = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?nickname=Gold+Ring");
+        $resFilterNick->assertOk();
+        $this->assertCount(1, $resFilterNick->json('data.items'));
+        $this->assertEquals($design1->code, $resFilterNick->json('data.items.0.code'));
+        $this->assertEquals('Gold Ring', $resFilterNick->json('data.items.0.nickname'));
+        $this->assertContains('Gold Ring', $resFilterNick->json('data.nicknames'));
+
+        // 9. Test filters=nicknames returns only nicknames list
+        $resOnlyNicks = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?filters=nicknames");
+        $resOnlyNicks->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filter', 'nicknames');
+        $this->assertContains('Gold Ring', $resOnlyNicks->json('nicknames'));
+        $this->assertContains('Silver Ring', $resOnlyNicks->json('nicknames'));
+        $this->assertNull($resOnlyNicks->json('data.items'));
+
+        // 10. Test dedicated craftsman nicknames endpoint
+        $resDedicatedNicks = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}/nicknames");
+        $resDedicatedNicks->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filter', 'nicknames');
+        $this->assertContains('Gold Ring', $resDedicatedNicks->json('nicknames'));
+        $this->assertContains('Silver Ring', $resDedicatedNicks->json('nicknames'));
+
+        // 11. Test filters=all (or ?filters=both) returns both product names and design nicknames
+        $resBothFilters = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?filters=all");
+        $resBothFilters->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filter', 'all');
+        $this->assertContains('Special Choker', $resBothFilters->json('filters.product_names'));
+        $this->assertContains('Gold Ring', $resBothFilters->json('filters.design_nicknames'));
+
+        // 12. Test dedicated /filters endpoint returns both filters
+        $resDedicatedBoth = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}/filters");
+        $resDedicatedBoth->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('filter', 'all');
+        $this->assertContains('Special Choker', $resDedicatedBoth->json('product_names'));
+        $this->assertContains('Gold Ring', $resDedicatedBoth->json('design_nicknames'));
+
+        // 13. Test filtering by both product_name and design_nickname at the same time
+        $resBothQuery = $this->withToken($token)->getJson("/api/craftsman-images/{$craftsman->id}?product_name=Special+Choker&design_nickname=Gold+Ring");
+        $resBothQuery->assertOk();
+        $this->assertCount(1, $resBothQuery->json('data.items'));
+        $this->assertEquals($design1->code, $resBothQuery->json('data.items.0.code'));
+        $this->assertEquals('Special Choker', $resBothQuery->json('data.items.0.product_name'));
+        $this->assertEquals('Gold Ring', $resBothQuery->json('data.items.0.design_nickname'));
     }
 
     public function test_craftsman_is_forbidden_from_craftsman_images_api(): void

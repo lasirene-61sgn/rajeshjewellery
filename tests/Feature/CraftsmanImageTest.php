@@ -172,4 +172,38 @@ class CraftsmanImageTest extends TestCase
             ->assertSee($codeWithoutImg)
             ->assertDontSee($codeWithImg);
     }
+
+    public function test_admin_can_filter_craftsman_images_by_nickname(): void
+    {
+        $craftsman = Craftsman::create([
+            'name'           => 'Nick Artisan ' . uniqid(),
+            'email'          => 'nick_' . uniqid() . '@example.com',
+            'mobile'         => '91' . rand(10000000, 99999999),
+            'password'       => Hash::make('secret123'),
+            'plain_password' => 'secret123',
+            'is_active'      => true,
+        ]);
+
+        $design1 = DesignCode::create([
+            'code'     => 'CODE-ROYAL-' . rand(100, 999),
+            'nickname' => 'Royal Necklace',
+            'image'    => 'design_codes/royal.jpg',
+        ]);
+
+        $design2 = DesignCode::create([
+            'code'     => 'CODE-SIMPLE-' . rand(100, 999),
+            'nickname' => 'Simple Stud',
+            'image'    => 'design_codes/stud.jpg',
+        ]);
+
+        $craftsman->designCodes()->attach([$design1->id, $design2->id]);
+
+        $response = $this->actingAs($this->admin, 'admin')
+            ->get(route('admin.craftsman_images.show', ['craftsman' => $craftsman, 'nickname' => 'Royal Necklace']));
+
+        $response->assertOk()
+            ->assertSee($design1->code)
+            ->assertSee('Royal Necklace')
+            ->assertDontSee($design2->code);
+    }
 }

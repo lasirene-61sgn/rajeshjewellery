@@ -97,8 +97,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 5. Craftsman Images Module (Admin Only)
     Route::get('/craftsman-images', [CraftsmanImageController::class, 'index'])->name('api.craftsman-images.index');
+    Route::get('/craftsman-images/filters', [CraftsmanImageController::class, 'allFilters'])->name('api.craftsman-images.all-filters');
     Route::get('/craftsman-images/product-names', [CraftsmanImageController::class, 'allProductNames'])->name('api.craftsman-images.all-product-names');
+    Route::get('/craftsman-images/nicknames', [CraftsmanImageController::class, 'allNicknames'])->name('api.craftsman-images.all-nicknames');
+    Route::get('/craftsman-images/design-nicknames', [CraftsmanImageController::class, 'allNicknames'])->name('api.craftsman-images.all-design-nicknames');
+    Route::get('/craftsman-images/{craftsman}/filters', [CraftsmanImageController::class, 'filters'])->name('api.craftsman-images.filters');
     Route::get('/craftsman-images/{craftsman}/product-names', [CraftsmanImageController::class, 'productNames'])->name('api.craftsman-images.product-names');
+    Route::get('/craftsman-images/{craftsman}/nicknames', [CraftsmanImageController::class, 'nicknames'])->name('api.craftsman-images.nicknames');
+    Route::get('/craftsman-images/{craftsman}/design-nicknames', [CraftsmanImageController::class, 'nicknames'])->name('api.craftsman-images.design-nicknames');
     Route::get('/craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('api.craftsman-images.show');
 
     /*
@@ -166,8 +172,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('craftsmen.index');
         Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('craftsmen.show');
         Route::get('/craftsman-images', [CraftsmanImageController::class, 'index'])->name('craftsman-images.index');
+        Route::get('/craftsman-images/filters', [CraftsmanImageController::class, 'allFilters'])->name('craftsman-images.all-filters');
         Route::get('/craftsman-images/product-names', [CraftsmanImageController::class, 'allProductNames'])->name('craftsman-images.all-product-names');
+        Route::get('/craftsman-images/nicknames', [CraftsmanImageController::class, 'allNicknames'])->name('craftsman-images.all-nicknames');
+        Route::get('/craftsman-images/design-nicknames', [CraftsmanImageController::class, 'allNicknames'])->name('craftsman-images.all-design-nicknames');
+        Route::get('/craftsman-images/{craftsman}/filters', [CraftsmanImageController::class, 'filters'])->name('craftsman-images.filters');
         Route::get('/craftsman-images/{craftsman}/product-names', [CraftsmanImageController::class, 'productNames'])->name('craftsman-images.product-names');
+        Route::get('/craftsman-images/{craftsman}/nicknames', [CraftsmanImageController::class, 'nicknames'])->name('craftsman-images.nicknames');
+        Route::get('/craftsman-images/{craftsman}/design-nicknames', [CraftsmanImageController::class, 'nicknames'])->name('craftsman-images.design-nicknames');
         Route::get('/craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('craftsman-images.show');
     });
     Route::prefix('admin')->middleware('api.admin')->name('api.admin.')->group(function () {
@@ -209,8 +221,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/craftsmen', [CraftsmanController::class, 'index'])->name('craftsmen.index');
         Route::get('/craftsmen/{craftsman}', [CraftsmanController::class, 'show'])->name('craftsmen.show');
         Route::get('/craftsman-images', [CraftsmanImageController::class, 'index'])->name('craftsman-images.index');
+        Route::get('/craftsman-images/filters', [CraftsmanImageController::class, 'allFilters'])->name('craftsman-images.all-filters');
         Route::get('/craftsman-images/product-names', [CraftsmanImageController::class, 'allProductNames'])->name('craftsman-images.all-product-names');
+        Route::get('/craftsman-images/nicknames', [CraftsmanImageController::class, 'allNicknames'])->name('craftsman-images.all-nicknames');
+        Route::get('/craftsman-images/design-nicknames', [CraftsmanImageController::class, 'allNicknames'])->name('craftsman-images.all-design-nicknames');
+        Route::get('/craftsman-images/{craftsman}/filters', [CraftsmanImageController::class, 'filters'])->name('craftsman-images.filters');
         Route::get('/craftsman-images/{craftsman}/product-names', [CraftsmanImageController::class, 'productNames'])->name('craftsman-images.product-names');
+        Route::get('/craftsman-images/{craftsman}/nicknames', [CraftsmanImageController::class, 'nicknames'])->name('craftsman-images.nicknames');
+        Route::get('/craftsman-images/{craftsman}/design-nicknames', [CraftsmanImageController::class, 'nicknames'])->name('craftsman-images.design-nicknames');
         Route::get('/craftsman-images/{craftsman}', [CraftsmanImageController::class, 'show'])->name('craftsman-images.show');
     });
 

@@ -116,6 +116,20 @@ class CraftsmanImageController extends Controller
             });
         }
 
+        if ($request->filled('nickname') || $request->filled('design_nickname')) {
+            $nickFilter = trim((string) ($request->input('nickname') ?? $request->input('design_nickname')));
+            $query->where(function ($q) use ($nickFilter) {
+                $q->where('design_codes.nickname', $nickFilter)
+                  ->orWhere('design_codes.nickname', 'like', "%{$nickFilter}%")
+                  ->orWhereExists(function ($sub) use ($nickFilter) {
+                      $sub->select(DB::raw(1))
+                          ->from('work_orders')
+                          ->whereColumn('work_orders.design_code', 'design_codes.code')
+                          ->where('work_orders.design_nickname', $nickFilter);
+                  });
+            });
+        }
+
         $designCodes = $query->orderBy('design_codes.code')->paginate(16)->withQueryString();
 
         // Product names associated with this craftsman and their assigned design codes
@@ -147,6 +161,44 @@ class CraftsmanImageController extends Controller
                 ->values();
         }
 
-        return view('admin.craftsman_images.show', compact('craftsman', 'designCodes', 'stats', 'productNames'));
+        // Design nicknames associated with this craftsman
+        $craftsmanNicknames = $craftsman->designCodes()
+            ->whereNotNull('design_codes.nickname')
+            ->where('design_codes.nickname', '!=', '')
+            ->pluck('design_codes.nickname');
+
+        $woNicknames = DB::table('work_orders')
+            ->where(function ($q) use ($craftsman) {
+                $q->where('craftsman_id', $craftsman->id)
+                  ->orWhereIn('design_code', function ($sub) use ($craftsman) {
+                      $sub->select('design_codes.code')
+                          ->from('design_codes')
+                          ->join('craftsman_design_code', 'design_codes.id', '=', 'craftsman_design_code.design_code_id')
+                          ->where('craftsman_design_code.craftsman_id', $craftsman->id)
+                          ->whereNotNull('design_codes.code');
+                  });
+            })
+            ->whereNotNull('design_nickname')
+            ->where('design_nickname', '!=', '')
+            ->pluck('design_nickname');
+
+        $nicknames = $craftsmanNicknames->merge($woNicknames)
+            ->filter(fn ($n) => !empty($n) && trim($n) !== '')
+            ->map(fn ($n) => trim($n))
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($nicknames->isEmpty()) {
+            $nicknames = DB::table('design_codes')
+                ->whereNotNull('nickname')
+                ->where('nickname', '!=', '')
+                ->distinct()
+                ->orderBy('nickname')
+                ->pluck('nickname')
+                ->values();
+        }
+
+        return view('admin.craftsman_images.show', compact('craftsman', 'designCodes', 'stats', 'productNames', 'nicknames'));
     }
 }
